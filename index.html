@@ -23,6 +23,7 @@
 @media (prefers-color-scheme: light){
   :root{--bg:#f2f4f8;--bg2:#e8ecf3;--panel:#ffffff;--line:#d3dae6;--ink:#0d1726;--dim:#56667e;--gold:#9a6a00;--gold-ink:#ffffff;--ember:#c8431f;--ice:#0a6f99;--ok:#1c8a55}
 }
+[hidden]{display:none!important}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 var(--body);overscroll-behavior:none}
 body{display:flex;flex-direction:column;height:100dvh;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
@@ -196,11 +197,11 @@ code{background:var(--bg2);border:1px solid var(--line);border-radius:6px;paddin
     <div class="row"><input id="mInput" placeholder="Es. Il martedì insegno ai principianti"><button class="btn" data-a="addMem">Ricorda</button></div>
     <div id="memList"></div>
     <h3>Scuola di Jarvis</h3>
-    <p class="hint">Claude fa da insegnante: ogni richiesta di routine che gli vedi risolvere diventa un'abilità che Jarvis impara. Quando ne è abbastanza sicuro la esegue da solo, senza chiamare Claude.</p>
+    <p class="hint">L'IA (Claude o Gemini) fa da insegnante: ogni richiesta di routine che gli vedi risolvere diventa un'abilità che Jarvis impara. Quando ne è abbastanza sicuro la esegue da solo, senza chiamare Claude.</p>
     <div class="result" id="autoBox"></div>
     <div class="row">
       <label class="f">Sicurezza richiesta prima di fare da solo<select id="thr"><option value="3">Prudente · 3 conferme</option><option value="2">Equilibrato · 2 conferme</option><option value="1">Audace · 1 conferma</option></select></label>
-      <label class="f">Modalità<select id="autoMode"><option value="0">Con insegnante (Claude)</option><option value="1">Autonoma (senza Claude)</option></select></label>
+      <label class="f">Modalità<select id="autoMode"><option value="0">Con insegnante (IA)</option><option value="1">Autonoma (senza IA)</option></select></label>
     </div>
     <div id="skillList"></div>
     <div class="row"><button class="btn ghost small" data-a="exportDataset">Esporta gli esempi</button><button class="btn ghost small" data-a="forgetSkills">Dimentica le abilità</button></div>
@@ -235,11 +236,19 @@ code{background:var(--bg2);border:1px solid var(--line);border-radius:6px;paddin
     <h2>Configurazione</h2>
     <h3>Cervello</h3>
     <div class="row">
-      <label class="f">Chiave API Claude<input id="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off" autocapitalize="off"></label>
-      <label class="f">Modello<input id="model" placeholder="claude-sonnet-5-5" autocapitalize="off"></label>
+      <label class="f">Quale IA<select id="provider"><option value="claude">Claude · a pagamento, il più affidabile</option><option value="gemini">Gemini · gratuito, con limiti</option></select></label>
       <label class="f">Come ti chiamo<input id="uName" placeholder="Es. Marco" autocomplete="off"></label>
     </div>
-    <p class="hint">La chiave resta solo su questo dispositivo e le richieste partono direttamente da qui verso Anthropic. Crea una chiave dedicata su console.anthropic.com e imposta un limite di spesa.</p>
+    <div class="row" id="claudeBox">
+      <label class="f">Chiave API Claude<input id="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off" autocapitalize="off"></label>
+      <label class="f">Modello Claude<input id="model" placeholder="claude-sonnet-5-5" autocapitalize="off"></label>
+    </div>
+    <div class="row" id="geminiBox" hidden>
+      <label class="f">Chiave API Gemini<input id="geminiKey" type="password" placeholder="AIza…" autocomplete="off" autocapitalize="off"></label>
+      <label class="f">Modello Gemini<input id="geminiModel" placeholder="gemini-3.5-flash" autocapitalize="off"></label>
+    </div>
+    <p class="hint" id="claudeNote">La chiave resta solo su questo dispositivo e le richieste partono direttamente da qui verso Anthropic. Crea una chiave dedicata su platform.claude.com e imposta un tetto di spesa.</p>
+    <p class="hint" id="geminiNote" hidden>La chiave resta solo su questo dispositivo. Il livello gratuito di Gemini ha limiti giornalieri e, secondo la documentazione di Google, i contenuti inviati possono servire a migliorare i loro prodotti: non scrivere mai dati di pazienti o di proprietari.</p>
     <div class="row"><button class="btn small" data-a="testBrain">Prova il cervello</button></div>
 
     <h3>Voce</h3>
@@ -299,7 +308,7 @@ const MESI = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','
 
 /* ================= stato ================= */
 const DEF = {agenda: [], spesa: [], memoria: [], lezioni: [], log: [], skills: [], dataset: [], recent: [],
-  stats: {cmds: 0, items: {}, voice: true, rate: 1, name: '', apiKey: '', model: 'claude-sonnet-5-5', introKey: false, threshold: 2, autonomous: false, teacherCalls: 0}};
+  stats: {cmds: 0, items: {}, voice: true, rate: 1, name: '', apiKey: '', model: 'claude-sonnet-5-5', introKey: false, threshold: 2, autonomous: false, teacherCalls: 0, provider: 'claude', geminiKey: '', geminiModel: 'gemini-3.5-flash'}};
 let S = JSON.parse(JSON.stringify(DEF));
 function load() {
   try {
@@ -658,10 +667,62 @@ async function askClaude(text, hist, trace) {
   }
   return 'La richiesta richiede troppi passaggi: proviamo a spezzarla.';
 }
+/* ---- cervello alternativo gratuito: Gemini ---- */
+const brainKey = () => S.stats.provider === 'gemini' ? S.stats.geminiKey : S.stats.apiKey;
+const hasBrain = () => !!brainKey();
+const askBrain = (text, hist, trace) => S.stats.provider === 'gemini' ? askGemini(text, hist, trace) : askClaude(text, hist, trace);
+function gSchema(sc) {
+  const o = {};
+  for (const [k, v] of Object.entries(sc)) {
+    if (k === 'type') o.type = String(v).toUpperCase();
+    else if (k === 'properties') { o.properties = {}; for (const [pk, pv] of Object.entries(v)) o.properties[pk] = gSchema(pv); }
+    else if (k === 'items') o.items = gSchema(v);
+    else o[k] = v;
+  }
+  return o;
+}
+async function askGemini(text, hist, trace) {
+  const contents = hist.map(m => ({role: m.role === 'assistant' ? 'model' : 'user', parts: [{text: m.content}]}));
+  const last = contents[contents.length - 1];
+  if (last && last.role === 'user') last.parts[0].text += '\n' + text; else contents.push({role: 'user', parts: [{text}]});
+  const decl = TOOLS.map(t => ({name: t.name, description: t.description, parameters: gSchema(t.input_schema)}));
+  const model = S.stats.geminiModel || 'gemini-3.5-flash';
+  for (let round = 0; round < 6; round++) {
+    const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 90000); let r;
+    try {
+      r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent', {method: 'POST', signal: ctl.signal,
+        headers: {'content-type': 'application/json', 'x-goog-api-key': S.stats.geminiKey},
+        body: JSON.stringify({systemInstruction: {parts: [{text: sysPrompt()}]}, contents, tools: [{functionDeclarations: decl}]})});
+    } finally { clearTimeout(to); }
+    if (!r.ok) { let d = ''; try { d = (await r.json()).error.message; } catch (e) {} throw {status: r.status, detail: d}; }
+    const j = await r.json(), cand = j.candidates && j.candidates[0];
+    if (!cand || !cand.content) throw {status: 0, detail: (j.promptFeedback && j.promptFeedback.blockReason) || 'risposta vuota'};
+    contents.push(cand.content);                       /* il turno del modello va rimandato intero (firme di ragionamento comprese) */
+    const parts = cand.content.parts || [], calls = parts.filter(p => p.functionCall);
+    if (!calls.length) return parts.filter(p => p.text && !p.thought).map(p => p.text).join('\n').trim();
+    const resp = [];
+    for (const p of calls) {
+      const fc = p.functionCall, t = TOOLS.find(x => x.name === fc.name); let out, err = false;
+      try { if (!t) throw new Error('strumento sconosciuto'); out = await t.run(fc.args || {}); trace.push({name: fc.name, input: JSON.parse(JSON.stringify(fc.args || {}))}); }
+      catch (e) { out = 'Errore: ' + e.message; err = true; trace.failed = true; }
+      const fr = {name: fc.name, response: err ? {error: out} : {result: out}}; if (fc.id) fr.id = fc.id;
+      resp.push({functionResponse: fr});
+    }
+    contents.push({role: 'user', parts: resp});
+  }
+  return 'La richiesta richiede troppi passaggi: proviamo a spezzarla.';
+}
 function errNote(e) {
-  if (e && e.status === 401) return 'La chiave API non è valida: controllala in Config › Cervello.';
-  if (e && e.status === 404) return 'Il modello «' + (S.stats.model || '') + '» non esiste: correggilo in Config › Cervello.';
-  if (e && e.status === 429) return 'Limite di richieste o credito esaurito sul tuo account Anthropic.';
+  const gem = S.stats.provider === 'gemini';
+  if (gem) {
+    if (e && e.status === 429) return 'Limite gratuito di Gemini raggiunto: aspetta un minuto o riprova domani.';
+    if (e && e.status === 404) return 'Il modello «' + (S.stats.geminiModel || '') + '» non esiste: correggilo in Config › Cervello.';
+    if (e && (e.status === 400 || e.status === 403)) return 'Gemini ha rifiutato la richiesta (' + e.status + (e.detail ? ': ' + e.detail : '') + '). Controlla la chiave in Config › Cervello.';
+  } else {
+    if (e && e.status === 401) return 'La chiave API non è valida: controllala in Config › Cervello.';
+    if (e && e.status === 404) return 'Il modello «' + (S.stats.model || '') + '» non esiste: correggilo in Config › Cervello.';
+    if (e && e.status === 429) return 'Limite di richieste o credito esaurito sul tuo account Anthropic.';
+  }
   if (e && e.status) return 'Errore del servizio (' + e.status + (e.detail ? ': ' + e.detail : '') + ').';
   return 'Non riesco a raggiungere il cervello: controlla la connessione.';
 }
@@ -773,7 +834,7 @@ async function runSkill(m, text) {
   const reply = localReply(outs);
   m.skill.uses++; m.skill.last = Date.now(); save();
   addLog('jv', reply);
-  addAction({title: 'Fatto da solo, senza Claude', sub: '«' + m.skill.label + '»', cta: 'Non era questo',
+  addAction({title: 'Fatto da solo, senza chiamare l\'IA', sub: '«' + m.skill.label + '»', cta: 'Non era questo',
     run: async () => { m.skill.trust = -1; save(); renderScuola(); busy = false; await handle(text, {teacher: true}); }});
   return reply;
 }
@@ -792,7 +853,7 @@ function pushRecent(x) { S.recent.push(x); S.recent = S.recent.slice(-40); save(
 function autonomy() { const r = S.recent; return r.length ? Math.round(100 * r.filter(x => x === 'L').length / r.length) : null; }
 function renderScuola() {
   const a = autonomy(), thr = Math.max(1, +S.stats.threshold || 2);
-  $('#autoBox').innerHTML = `Autonomia <b>${a === null ? '—' : a + '%'}</b> · abilità apprese <b>${S.skills.length}</b> · richieste a Claude <b>${S.stats.teacherCalls || 0}</b><div class="bar"><i style="width:${a || 0}%"></i></div>`;
+  $('#autoBox').innerHTML = `Autonomia <b>${a === null ? '—' : a + '%'}</b> · abilità apprese <b>${S.skills.length}</b> · richieste all'insegnante <b>${S.stats.teacherCalls || 0}</b><div class="bar"><i style="width:${a || 0}%"></i></div>`;
   $('#thr').value = String(thr); $('#autoMode').value = S.stats.autonomous ? '1' : '0';
   $('#skillList').innerHTML = S.skills.length ? '<ul class="list">' + S.skills.slice().sort((x, y) => y.trust - x.trust).map(k =>
     `<li><span class="t">${esc(k.label)}<br><span class="hint">${k.trust >= thr ? 'autonoma' : 'in apprendimento ' + Math.max(0, k.trust) + '/' + thr} · usata ${k.uses} volte</span></span><button class="x" data-a="delSkill" data-id="${k.id}" aria-label="Elimina">×</button></li>`).join('') + '</ul>'
@@ -816,7 +877,7 @@ async function handle(text, opts) {
   opts = opts || {}; busy = true; const hist = historyMessages(); addLog('me', text); setState('thinking', 'Elaboro…');
   let reply = null, note = '';
   try {
-    const teacherOK = !!S.stats.apiKey && !S.stats.autonomous && navigator.onLine !== false;
+    const teacherOK = hasBrain() && !S.stats.autonomous && navigator.onLine !== false;
     const m0 = matchSkill(text), thr = Math.max(1, +S.stats.threshold || 2);
     if (m0 && !opts.teacher && (!teacherOK || m0.skill.trust >= thr)) {
       try { reply = await runSkill(m0, text); pushRecent('L'); } catch (e) { reply = null; note = 'L\'abilità appresa non è riuscita: ' + e.message; }
@@ -825,9 +886,9 @@ async function handle(text, opts) {
       const entry = {who: 'jv', text: '…'}; S.log.push(entry); renderChat(); const trace = [];
       try {
         S.stats.cmds++; S.stats.teacherCalls = (S.stats.teacherCalls || 0) + 1;
-        reply = (await askClaude(text, hist, trace)) || 'Fatto.'; entry.text = reply; pushRecent('T'); afterTeacher(text, trace, reply, m0);
+        reply = (await askBrain(text, hist, trace)) || 'Fatto.'; entry.text = reply; pushRecent('T'); afterTeacher(text, trace, reply, m0);
       } catch (e) { const i = S.log.indexOf(entry); if (i >= 0) S.log.splice(i, 1); note = errNote(e); reply = null; }
-    } else if (reply === null && !S.stats.apiKey && !S.stats.introKey) { S.stats.introKey = true; note = 'Per capire il linguaggio libero inserisci la chiave API in Config › Cervello.'; }
+    } else if (reply === null && !hasBrain() && !S.stats.introKey) { S.stats.introKey = true; note = 'Per capire il linguaggio libero scegli quale IA usare e inserisci la chiave in Config › Cervello.'; }
     if (reply === null) {
       unhandled = false;
       try { reply = interpret(text); } catch (e) { reply = 'Qualcosa è andato storto: ' + e.message; }
@@ -959,8 +1020,8 @@ function renderLearned() {
   $('#learned').innerHTML = `<ul class="list"><li><span class="t">Comandi ricevuti</span><b>${S.stats.cmds}</b></li><li><span class="t">Lezioni salvate</span><b>${S.lezioni.length}</b></li><li><span class="t">Voci frequenti in spesa</span><span>${top.length ? top.map(e => esc(e[0]) + ' (' + e[1] + ')').join(', ') : '—'}</span></li></ul>`;
 }
 function renderBrain() {
-  const on = !!S.stats.apiKey, a = autonomy(); $('#brain').classList.toggle('on', on || !!S.skills.length);
-  $('#brainTxt').textContent = S.stats.autonomous ? 'Modalità autonoma' : on ? 'Cervello IA attivo' + (a !== null ? ' · autonomia ' + a + '%' : '') : 'Solo comandi base';
+  const on = hasBrain(), a = autonomy(); $('#brain').classList.toggle('on', on || !!S.skills.length);
+  $('#brainTxt').textContent = S.stats.autonomous ? 'Modalità autonoma' : on ? 'Cervello ' + (S.stats.provider === 'gemini' ? 'Gemini' : 'Claude') + ' attivo' + (a !== null ? ' · autonomia ' + a + '%' : '') : 'Solo comandi base';
 }
 function renderDiag() {
   const yes = (ok, t, f) => `<li><span class="${ok ? 'ok' : 'no'}">${ok ? '●' : '○'}</span> ${esc(ok ? t : f)}</li>`;
@@ -971,7 +1032,7 @@ function renderDiag() {
     yes(!!navigator.standalone || matchMedia('(display-mode: standalone)').matches, 'Aperta come app installata', 'Aperta in Safari (non installata)'),
     yes('speechSynthesis' in window, 'Sintesi vocale disponibile · voce italiana: ' + voice, 'Sintesi vocale non disponibile'),
     yes(!!SR, 'Riconoscimento vocale disponibile', 'Riconoscimento vocale non disponibile: usa la dettatura della tastiera o Siri'),
-    yes(!!S.stats.apiKey, 'Chiave API inserita', 'Chiave API mancante'),
+    yes(hasBrain(), 'Chiave API inserita (' + (S.stats.provider === 'gemini' ? 'Gemini' : 'Claude') + ')', 'Chiave API mancante'),
     yes(!!(navigator.canShare), 'Condivisione file (Pages, Calendario) disponibile', 'Condivisione file non disponibile'),
     yes('serviceWorker' in navigator && !!navigator.serviceWorker.controller, 'Funziona offline (service worker attivo)', 'Offline non ancora attivo: riapri l\'app una volta con connessione')
   ].join('');
@@ -1023,7 +1084,7 @@ document.addEventListener('click', async e => {
   else if (a === 'delMem') { S.memoria = S.memoria.filter(x => x.id !== id); save(); renderMem(); }
   else if (a === 'calcDose') calcDose();
   else if (a === 'refreshDiag') renderDiag();
-  else if (a === 'testBrain') { if (!S.stats.apiKey) { addLog('jv', 'Inserisci prima la chiave API.'); setView('jarvis'); return; } setView('jarvis'); handle('Presentati in una frase e dimmi che il collegamento funziona.'); }
+  else if (a === 'testBrain') { if (!hasBrain()) { addLog('jv', 'Inserisci prima la chiave API.'); setView('jarvis'); return; } setView('jarvis'); handle('Presentati in una frase e dimmi che il collegamento funziona.'); }
   else if (a === 'delSkill') { S.skills = S.skills.filter(x => x.id !== id); save(); renderScuola(); }
   else if (a === 'forgetSkills') { if (confirm('Cancellare tutte le abilità apprese?')) { S.skills = []; S.recent = []; save(); renderScuola(); renderBrain(); } }
   else if (a === 'exportDataset') shareFile(new File([S.dataset.map(d => JSON.stringify({utterance: d.u, tool_calls: d.calls, reply: d.r})).join('\n')], 'jarvis-esempi.jsonl', {type: 'text/plain'}));
@@ -1043,6 +1104,13 @@ $('#impFile').addEventListener('change', async e => {
 });
 $('#thr').addEventListener('change', e => { S.stats.threshold = +e.target.value; save(); renderScuola(); });
 $('#autoMode').addEventListener('change', e => { S.stats.autonomous = e.target.value === '1'; save(); renderScuola(); renderBrain(); });
+function syncProvider() {
+  const g = S.stats.provider === 'gemini';
+  $('#claudeBox').hidden = g; $('#claudeNote').hidden = g; $('#geminiBox').hidden = !g; $('#geminiNote').hidden = !g; $('#provider').value = g ? 'gemini' : 'claude';
+}
+$('#provider').addEventListener('change', e => { S.stats.provider = e.target.value; save(); syncProvider(); renderBrain(); });
+$('#geminiKey').addEventListener('change', e => { S.stats.geminiKey = e.target.value.trim(); save(); renderBrain(); });
+$('#geminiModel').addEventListener('change', e => { S.stats.geminiModel = e.target.value.trim() || 'gemini-3.5-flash'; save(); });
 $('#apiKey').addEventListener('change', e => { S.stats.apiKey = e.target.value.trim(); save(); renderBrain(); });
 $('#model').addEventListener('change', e => { S.stats.model = e.target.value.trim() || 'claude-sonnet-5-5'; save(); });
 $('#uName').addEventListener('change', e => { S.stats.name = e.target.value.trim(); save(); });
@@ -1060,7 +1128,7 @@ function tick() {
 }
 load(); buildOrb(); tick(); setInterval(tick, 20000);
 $('#aDate').value = isoDate(new Date());
-$('#apiKey').value = S.stats.apiKey; $('#model').value = S.stats.model; $('#uName').value = S.stats.name; $('#vRate').value = S.stats.rate || 1;
+$('#geminiKey').value = S.stats.geminiKey || ''; $('#geminiModel').value = S.stats.geminiModel || 'gemini-3.5-flash'; syncProvider(); $('#apiKey').value = S.stats.apiKey; $('#model').value = S.stats.model; $('#uName').value = S.stats.name; $('#vRate').value = S.stats.rate || 1;
 $('#tVoice').setAttribute('aria-pressed', String(S.stats.voice !== false));
 $('#shortcutUrl').textContent = location.origin + location.pathname + '?q=';
 if (!S.log.length) S.log.push({who: 'jv', text: 'Sono Jarvis. Dimmi cosa serve: agenda, spesa, lezioni, documenti, messaggi. Per capire il linguaggio libero inserisci la chiave API in Config.'});
