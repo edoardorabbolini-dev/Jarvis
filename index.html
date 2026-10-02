@@ -253,7 +253,18 @@ code{background:var(--bg2);border:1px solid var(--line);border-radius:6px;paddin
 
     <h3>Voce</h3>
     <p class="hint">Jarvis parla con la voce italiana predefinita del dispositivo. La voce di Siri è riservata a Siri: per cambiare quella di Jarvis vai su Impostazioni › Accessibilità › Contenuto letto › Voci.</p>
-    <div class="row"><label class="f">Velocità<input id="vRate" type="range" min="0.7" max="1.3" step="0.05"></label><button class="btn small" id="vTest">Prova la voce</button></div>
+    <div class="row">
+      <label class="f">Motore voce<select id="vEngine"><option value="device">Voce del dispositivo · gratis, anche offline</option><option value="gemini">Voce Gemini · più naturale, richiede chiave</option></select></label>
+    </div>
+    <div id="gemVoiceBox" hidden>
+      <div class="row">
+        <label class="f">Chiave API Gemini<input id="gKeyVoice" type="password" placeholder="La stessa del cervello" autocomplete="off" autocapitalize="off"></label>
+        <label class="f">Timbro<select id="gVoice"><option value="Charon">Charon · maschile, informativo</option><option value="Orus">Orus · maschile, deciso</option><option value="Alnilam">Alnilam · maschile, fermo</option><option value="Algenib">Algenib · maschile, roco</option><option value="Iapetus">Iapetus · maschile, limpido</option><option value="Kore">Kore · femminile, decisa</option></select></label>
+        <label class="f">Modello vocale<input id="ttsModel" placeholder="gemini-2.5-flash-preview-tts" autocapitalize="off"></label>
+      </div>
+      <p class="hint">Il testo delle risposte viene inviato a Google per creare l'audio. Il livello gratuito ha limiti stretti sui modelli vocali: quando finiscono, Jarvis passa da solo alla voce del dispositivo.</p>
+    </div>
+    <div class="row"><label class="f">Velocità (voce del dispositivo)<input id="vRate" type="range" min="0.7" max="1.3" step="0.05"></label><button class="btn small" id="vTest">Prova la voce</button></div>
 
     <h3>Chiamare Jarvis come Siri</h3>
     <p class="hint">iOS non permette a una web app di ascoltare in background. Il modo è un Comando Rapido: Siri ascolta, detta il testo e lo passa a Jarvis.</p>
@@ -308,7 +319,7 @@ const MESI = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','
 
 /* ================= stato ================= */
 const DEF = {agenda: [], spesa: [], memoria: [], lezioni: [], log: [], skills: [], dataset: [], recent: [],
-  stats: {cmds: 0, items: {}, voice: true, rate: 1, name: '', apiKey: '', model: 'claude-sonnet-5-5', introKey: false, threshold: 2, autonomous: false, teacherCalls: 0, provider: 'claude', geminiKey: '', geminiModel: 'gemini-3.5-flash'}};
+  stats: {cmds: 0, items: {}, voice: true, rate: 1, name: '', apiKey: '', model: 'claude-sonnet-5-5', introKey: false, threshold: 2, autonomous: false, teacherCalls: 0, provider: 'claude', geminiKey: '', geminiModel: 'gemini-3.5-flash', voiceEngine: 'device', gvoice: 'Charon', ttsModel: 'gemini-2.5-flash-preview-tts'}};
 let S = JSON.parse(JSON.stringify(DEF));
 function load() {
   try {
@@ -911,18 +922,75 @@ function normalizeIt(t) {
     .replace(/(\d)\s?m\b/g, '$1 metri').replace(/(\d)\s?(?:min\b|′)/g, '$1 minuti')
     .replace(/×/g, ' per ').replace(/%/g, ' per cento').replace(/[·•]/g, ', ').replace(/\s*[()]\s*/g, ', ').replace(/\s+/g, ' ').trim();
 }
+const player = new Audio(); player.setAttribute('playsinline', ''); player.preload = 'auto';
+const SILENT = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=';
+let gemBroken = false, gemWarned = false, pendingAudio = null;
 function unlockSpeech() {
-  if (unlocked || !('speechSynthesis' in window)) return; unlocked = true;
+  if (unlocked) return; unlocked = true;
+  try { player.src = SILENT; const pp = player.play(); if (pp && pp.catch) pp.catch(() => {}); } catch (e) {}
+  if (!('speechSynthesis' in window)) return;
   try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) {}
 }
 ['pointerdown', 'touchend', 'keydown'].forEach(ev => document.addEventListener(ev, unlockSpeech, {once: true, passive: true}));
 function doneSpeaking() { paused = false; if (wakeMode) setTimeout(startRec, 700); else idleStatus(); }
 function idleStatus() { setState('idle', wakeMode ? 'In ascolto: dì «Jarvis»' : 'Tocca il nucleo e parla'); }
+function stopAudio() { try { player.pause(); } catch (e) {} try { speechSynthesis.cancel(); } catch (e) {} }
+function stopSpeech() { speakId++; stopAudio(); }
 function speak(text) {
-  $('#hear').classList.remove('on'); pendingSpeech = '';
-  if (!('speechSynthesis' in window)) { if (!voiceWarned) { voiceWarned = true; addLog('jv', 'Questo browser non ha la sintesi vocale.'); } idleStatus(); return; }
-  unlockSpeech(); pauseRec(); speakId++; const id = speakId;
+  $('#hear').classList.remove('on'); pendingSpeech = ''; pendingAudio = null;
+  unlockSpeech(); pauseRec(); stopAudio(); speakId++; const id = speakId;
   const clean = normalizeIt(text); if (!clean) { doneSpeaking(); return; }
+  if (S.stats.voiceEngine === 'gemini' && S.stats.geminiKey && !gemBroken) speakGemini(text, clean, id);
+  else speakDevice(text, clean, id);
+}
+/* ---- voce Gemini (audio PCM 24 kHz mono 16 bit, convertito in WAV) ---- */
+function pcmToWav(b64) {
+  const bin = atob(b64), n = bin.length, buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+  const w = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVE'); w(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 24000, true); v.setUint32(28, 48000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, n, true);
+  const u = new Uint8Array(buf, 44); for (let i = 0; i < n; i++) u[i] = bin.charCodeAt(i);
+  return new Blob([buf], {type: 'audio/wav'});
+}
+function gemFail(e) {
+  let why;
+  if (e && e.status === 429) why = 'Limite gratuito della voce Gemini raggiunto';
+  else if (e && e.status === 404) { why = 'Il modello vocale «' + (S.stats.ttsModel || '') + '» non esiste: correggilo in Config › Voce'; gemBroken = true; }
+  else if (e && (e.status === 400 || e.status === 403)) { why = 'Gemini ha rifiutato la richiesta vocale (' + e.status + (e.detail ? ': ' + e.detail : '') + ')'; gemBroken = true; }
+  else why = 'Non riesco a raggiungere la voce Gemini';
+  if (!gemWarned) { gemWarned = true; addLog('jv', why + '. Uso la voce del dispositivo.'); }
+}
+function playBlob(blob, text, id) {
+  const url = URL.createObjectURL(blob);
+  player.onplay = () => setState('speaking', 'Parlo…');
+  player.onended = () => { URL.revokeObjectURL(url); if (id === speakId) doneSpeaking(); };
+  player.onerror = () => { if (id === speakId) doneSpeaking(); };
+  player.src = url;
+  const pr = player.play();
+  if (pr && pr.catch) pr.catch(() => { if (id !== speakId) return; pendingAudio = blob; pendingSpeech = text; $('#hear').classList.add('on'); doneSpeaking(); });
+}
+async function speakGemini(text, clean, id) {
+  setState('thinking', 'Preparo la voce…');
+  let spoken = clean.slice(0, 700); if (clean.length > 700) { const k = spoken.lastIndexOf('.'); if (k > 200) spoken = spoken.slice(0, k + 1); }
+  const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 20000);
+  try {
+    const model = S.stats.ttsModel || 'gemini-2.5-flash-preview-tts';
+    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent', {method: 'POST', signal: ctl.signal,
+      headers: {'content-type': 'application/json', 'x-goog-api-key': S.stats.geminiKey},
+      body: JSON.stringify({contents: [{parts: [{text: 'Dillo in italiano, con tono calmo, elegante e sicuro, come un maggiordomo raffinato: ' + spoken}]},],
+        generationConfig: {responseModalities: ['AUDIO'], speechConfig: {voiceConfig: {prebuiltVoiceConfig: {voiceName: S.stats.gvoice || 'Charon'}}}}})});
+    clearTimeout(to);
+    if (!r.ok) { let d = ''; try { d = (await r.json()).error.message; } catch (e) {} throw {status: r.status, detail: d}; }
+    const j = await r.json(), part = (((((j.candidates || [])[0] || {}).content || {}).parts) || []).find(p => p.inlineData && p.inlineData.data);
+    if (!part) throw {status: 0, detail: 'nessun audio ricevuto'};
+    const blob = pcmToWav(part.inlineData.data);
+    if (id !== speakId) return;
+    playBlob(blob, text, id);
+  } catch (e) { clearTimeout(to); if (id !== speakId) return; gemFail(e); speakDevice(text, clean, id); }
+}
+/* ---- voce del dispositivo ---- */
+function speakDevice(text, clean, id) {
+  if (!('speechSynthesis' in window)) { if (!voiceWarned) { voiceWarned = true; addLog('jv', 'Questo browser non ha la sintesi vocale.'); } doneSpeaking(); return; }
   const raw = clean.match(/[^.!?;\n]+[.!?;]?/g) || [clean], parts = [];
   raw.map(x => x.trim()).filter(Boolean).forEach(x => { if (parts.length && parts[parts.length - 1].length < 28) parts[parts.length - 1] += ' ' + x; else parts.push(x); });
   let i = 0, started = false;
@@ -945,8 +1013,10 @@ function speak(text) {
     if (!voiceWarned) { voiceWarned = true; addLog('jv', 'iOS non mi lascia parlare senza un tuo tocco. Premi «Tocca per ascoltare la risposta». Se resta muto, controlla l\'interruttore silenzioso e il volume.'); }
   }, 2800);
 }
-function stopSpeech() { speakId++; try { speechSynthesis.cancel(); } catch (e) {} }
-$('#hear').addEventListener('click', () => { const t = pendingSpeech; if (t) speak(t); });
+$('#hear').addEventListener('click', () => {
+  if (pendingAudio) { const bl = pendingAudio; pendingAudio = null; $('#hear').classList.remove('on'); pauseRec(); speakId++; playBlob(bl, '', speakId); return; }
+  const t = pendingSpeech; if (t) speak(t);
+});
 
 /* ================= voce: riconoscimento ================= */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1109,8 +1179,13 @@ function syncProvider() {
   $('#claudeBox').hidden = g; $('#claudeNote').hidden = g; $('#geminiBox').hidden = !g; $('#geminiNote').hidden = !g; $('#provider').value = g ? 'gemini' : 'claude';
 }
 $('#provider').addEventListener('change', e => { S.stats.provider = e.target.value; save(); syncProvider(); renderBrain(); });
-$('#geminiKey').addEventListener('change', e => { S.stats.geminiKey = e.target.value.trim(); save(); renderBrain(); });
+$('#geminiKey').addEventListener('change', e => { S.stats.geminiKey = e.target.value.trim(); $('#gKeyVoice').value = S.stats.geminiKey; gemBroken = false; save(); renderBrain(); });
 $('#geminiModel').addEventListener('change', e => { S.stats.geminiModel = e.target.value.trim() || 'gemini-3.5-flash'; save(); });
+function syncVoiceEngine() { const g = S.stats.voiceEngine === 'gemini'; $('#gemVoiceBox').hidden = !g; $('#vEngine').value = g ? 'gemini' : 'device'; }
+$('#vEngine').addEventListener('change', e => { S.stats.voiceEngine = e.target.value; gemBroken = false; gemWarned = false; save(); syncVoiceEngine(); });
+$('#gKeyVoice').addEventListener('change', e => { S.stats.geminiKey = e.target.value.trim(); $('#geminiKey').value = S.stats.geminiKey; gemBroken = false; gemWarned = false; save(); renderBrain(); });
+$('#gVoice').addEventListener('change', e => { S.stats.gvoice = e.target.value; save(); });
+$('#ttsModel').addEventListener('change', e => { S.stats.ttsModel = e.target.value.trim() || 'gemini-2.5-flash-preview-tts'; gemBroken = false; save(); });
 $('#apiKey').addEventListener('change', e => { S.stats.apiKey = e.target.value.trim(); save(); renderBrain(); });
 $('#model').addEventListener('change', e => { S.stats.model = e.target.value.trim() || 'claude-sonnet-5-5'; save(); });
 $('#uName').addEventListener('change', e => { S.stats.name = e.target.value.trim(); save(); });
@@ -1128,7 +1203,7 @@ function tick() {
 }
 load(); buildOrb(); tick(); setInterval(tick, 20000);
 $('#aDate').value = isoDate(new Date());
-$('#geminiKey').value = S.stats.geminiKey || ''; $('#geminiModel').value = S.stats.geminiModel || 'gemini-3.5-flash'; syncProvider(); $('#apiKey').value = S.stats.apiKey; $('#model').value = S.stats.model; $('#uName').value = S.stats.name; $('#vRate').value = S.stats.rate || 1;
+$('#geminiKey').value = S.stats.geminiKey || ''; $('#geminiModel').value = S.stats.geminiModel || 'gemini-3.5-flash'; syncProvider(); $('#gKeyVoice').value = S.stats.geminiKey || ''; $('#gVoice').value = S.stats.gvoice || 'Charon'; $('#ttsModel').value = S.stats.ttsModel || 'gemini-2.5-flash-preview-tts'; syncVoiceEngine(); $('#apiKey').value = S.stats.apiKey; $('#model').value = S.stats.model; $('#uName').value = S.stats.name; $('#vRate').value = S.stats.rate || 1;
 $('#tVoice').setAttribute('aria-pressed', String(S.stats.voice !== false));
 $('#shortcutUrl').textContent = location.origin + location.pathname + '?q=';
 if (!S.log.length) S.log.push({who: 'jv', text: 'Sono Jarvis. Dimmi cosa serve: agenda, spesa, lezioni, documenti, messaggi. Per capire il linguaggio libero inserisci la chiave API in Config.'});
