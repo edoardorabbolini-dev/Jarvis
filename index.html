@@ -172,6 +172,7 @@ nav button.on{text-shadow:0 0 8px rgba(44,196,255,.8)}
     <div id="chat" aria-live="polite"></div>
     <div id="composer">
       <input id="cmd" type="text" placeholder="Scrivi o detta a Jarvis…" autocomplete="off" autocapitalize="sentences" enterkeyhint="send">
+      <button class="btn ghost" id="pasteBtn" data-a="pasteImport" aria-label="Incolla dai Comandi Rapidi">Incolla</button>
       <button class="btn" id="send">Invia</button>
     </div>
   </section>
@@ -303,30 +304,30 @@ nav button.on{text-shadow:0 0 8px rgba(44,196,255,.8)}
     <div class="row"><label class="f">Velocità (voce del dispositivo)<input id="vRate" type="range" min="0.7" max="1.3" step="0.05"></label><button class="btn small" id="vTest">Prova la voce</button></div>
 
     <h3>Chiamare Jarvis come Siri</h3>
-    <p class="hint">iOS non lascia ascoltare una web app in background: la chiamata passa da un Comando Rapido. <b>Attenzione:</b> l'app installata e Safari hanno dati separati, chiave del cervello compresa. Il link del Comando Rapido si apre in Safari e lì non trova la chiave. Due soluzioni:</p>
-    <ol class="steps">
-      <li><b>Consigliata · Jarvis in Safari.</b> Elimina l'icona di Jarvis dalla Home, apri l'indirizzo in Safari, inserisci la chiave in Config, poi Condividi › Aggiungi a Home e <b>disattiva «Apri come app web»</b>. Icona, Siri e Comandi Rapidi useranno gli stessi dati.</li>
-      <li><b>Da provare · app installata.</b> Nell'azione «Apri URL» scrivi <code>webapp://</code> al posto di <code>https://</code>: su iPadOS 26 dovrebbe aprire l'app installata. Se non succede, usa la soluzione 1.</li>
-    </ol>
+    <p class="hint">iOS non lascia ascoltare una web app in background: la richiesta passa da un Comando Rapido. Per far arrivare i dati nell'<b>app installata</b> si usano gli appunti, perché un link si aprirebbe in Safari (dati separati).</p>
     <p class="hint"><b>Comando Rapido «Jarvis»</b> (il nome è la parola per Siri):</p>
     <ol class="steps">
-      <li>Azione <b>Detta testo</b>, lingua Italiano, «Smetti di ascoltare: dopo una pausa». Deve essere il primo passo.</li>
-      <li>Azione <b>Testo</b>: scrivi <code id="shortcutUrl">…</code> e subito dopo inserisci la variabile <b>Testo dettato</b>.</li>
-      <li>Azione <b>Apri URL</b> con quel testo.</li>
-      <li>Dì «Ehi Siri, Jarvis», detta la richiesta: Jarvis la esegue. Per sentire la risposta tocca «Tocca per ascoltare».</li>
+      <li>Azione <b>Detta testo</b>, lingua Italiano.</li>
+      <li>Azione <b>Testo</b>: scrivi <code>JARVISQ:</code> e subito dopo inserisci la variabile <b>Testo dettato</b>.</li>
+      <li>Azione <b>Copia negli appunti</b> con quel testo.</li>
+      <li>Azione <b>Apri app</b> e scegli Jarvis (se non compare nell'elenco, aprilo tu dalla Home).</li>
+      <li>In Jarvis tocca <b>Incolla</b>: la richiesta parte e Jarvis risponde.</li>
     </ol>
-    <p class="hint">Quando il link arriva a Jarvis, nel «Registro tecnico» in fondo compare una riga che dice se è arrivato in Safari o nell'app installata.</p>
+    <p class="hint"><b>In alternativa, Jarvis in Safari:</b> al posto dei passi 3-5 usa «Codifica URL» e «Apri URL» con <code id="shortcutUrl">…</code> seguito dal testo codificato. Funziona solo se usi Jarvis in Safari, non come app installata.</p>
 
     <h3>Calendario iOS</h3>
     <p class="hint">Jarvis legge una copia del tuo Calendario ogni volta che esegui il Comando Rapido «Jarvis Calendario»: non è in tempo reale.</p>
     <ol class="steps">
       <li>Nuovo comando, nome <b>Jarvis Calendario</b>.</li>
       <li>Azione <b>Trova eventi del calendario</b>: «Data di inizio» è nei prossimi 14 giorni.</li>
-      <li>Azione <b>Ripeti con ciascuno</b> sugli eventi. Dentro, azione <b>Testo</b> con: [Data di inizio] | [Titolo] | [Luogo]. Tocca la data, scegli «Formato data › Personalizzato» e scrivi <code>yyyy-MM-dd HH:mm</code>.</li>
-      <li>Dopo il ciclo, azione <b>Combina testo</b> sui risultati, separatore «Personalizzato» con il carattere <code>~</code>.</li>
-      <li>Azione <b>Apri URL</b>: <code id="calUrl">…</code> seguito dal testo combinato.</li>
-      <li>In Jarvis tocca «Aggiorna dal Calendario iOS» nella scheda Oggi. Per aggiornarlo da solo crea un'automazione personale «Ora del giorno» che esegue il comando.</li>
+      <li>Azione <b>Ripeti per ciascun elemento</b>. Dentro, azione <b>Testo</b>: [Data di inizio] | [Titolo] | [Posizione]. Sulla data usa «Formato data › Personalizzato» e scrivi <code>yyyy-MM-dd HH:mm</code>.</li>
+      <li>Dopo il ciclo, azione <b>Combina testo</b> sui <b>Risultati ripetizione</b>, separatore «Personalizzato» con il carattere <code>~</code>.</li>
+      <li>Azione <b>Testo</b>: scrivi <code>JARVISCAL:</code> e subito dopo inserisci la variabile <b>Testo combinato</b>.</li>
+      <li>Azione <b>Copia negli appunti</b> con quel testo.</li>
+      <li>Azione <b>Apri app</b> e scegli Jarvis (se non c'è, torna a Jarvis dalla Home).</li>
+      <li>In Jarvis tocca <b>Incolla</b>, oppure il pulsante «Incolla dagli appunti» nella scheda Oggi. iOS può chiedere di consentire l'incolla: tocca «Consenti».</li>
     </ol>
+    <p class="hint">Alternativa per Safari: <code id="calUrl">…</code> seguito dal testo codificato.</p>
 
     <h3>Cosa può fare sull'iPad</h3>
     <ul class="hint">
@@ -674,7 +675,7 @@ function renderIcal() {
   const age = S.ical && S.ical.ts ? 'aggiornato ' + new Date(S.ical.ts).toLocaleString('it-IT', {day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit'}) : 'mai sincronizzato';
   el.innerHTML = `<h3>Calendario iOS</h3><p class="hint">${esc(age)}</p>` + (ev.length ? '<ul class="list">' + ev.slice(0, 40).map(e =>
     `<li><span class="time">${esc(e.time || '—')}</span><span class="t">${esc(e.title)}${e.place ? '<br><span class="hint">' + esc(e.place) + '</span>' : ''}<br><span class="hint">${esc(dayLabel(e.date))}</span></span></li>`).join('') + '</ul>' : '<div class="empty">Nessun evento sincronizzato.</div>') +
-    '<div class="row"><button class="btn ghost small" data-a="syncCal">Aggiorna dal Calendario iOS</button></div>';
+    '<div class="row"><button class="btn ghost small" data-a="syncCal">Aggiorna dal Calendario iOS</button><button class="btn ghost small" data-a="pasteImport">Incolla dagli appunti</button></div>';
 }
 
 /* ================= importazione chat WhatsApp ================= */
@@ -731,6 +732,23 @@ async function importChat(file) {
   } catch (e) { addLog('jv', 'Non sono riuscito a leggere la chat: ' + e.message); dbg('import chat: ' + e.message); }
 }
 
+/* ================= ponte con i Comandi Rapidi tramite gli appunti (funziona anche nell'app installata) ================= */
+async function pasteImport() {
+  let t = '';
+  try { t = await navigator.clipboard.readText(); } catch (e) { dbg('appunti: ' + (e.message || e.name)); t = prompt('Incolla qui il testo copiato dal Comando Rapido (tieni premuto sul campo e scegli Incolla)', '') || ''; }
+  t = String(t).trim(); dbg('appunti letti: ' + t.length + ' caratteri');
+  if (!t) { addLog('jv', 'Gli appunti sono vuoti. Esegui prima il Comando Rapido e poi riprova.'); return; }
+  if (/^JARVISCAL:/i.test(t)) { importCal(t.replace(/^JARVISCAL:/i, '')); return; }
+  if (/^JARVISQ:/i.test(t)) { setView('jarvis'); await handle(t.replace(/^JARVISQ:/i, ''), {fromLink: true}); return; }
+  if (/^\s*\d{4}-\d{2}-\d{2}[^|]*\|/.test(t)) { importCal(t); return; }
+  addLog('jv', 'Negli appunti non c\'è nulla di Jarvis. Esegui il Comando Rapido «Jarvis» o «Jarvis Calendario» e poi tocca Incolla.');
+}
+function offerPaste() {
+  const pend = S.stats.pendingPaste || 0;
+  if (!pend || Date.now() - pend > 15 * 60 * 1000) return;
+  S.stats.pendingPaste = 0; save();
+  addAction({title: 'Dati dal Comando Rapido', sub: 'Tocca per leggerli dagli appunti', cta: 'Incolla', run: () => pasteImport()});
+}
 /* ================= interprete locale (senza chiave) ================= */
 function setPlan(pub, liv, stile, min) {
   currentPlan = genPlan(pub, liv, stile, min);
@@ -1313,7 +1331,7 @@ $('#tWake').addEventListener('click', e => {
   wakeMode = !wakeMode; e.currentTarget.setAttribute('aria-pressed', String(wakeMode)); stopRec(); paused = false;
   if (wakeMode) { addLog('jv', 'Ascolto continuo attivo: finché Jarvis resta aperto e in primo piano, dì «Jarvis» seguito dal comando.'); dbg('ascolto continuo: acceso'); startRec(); } else { dbg('ascolto continuo: spento'); idleStatus(); }
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden) { stopRec(); } else { maybeRecap(); if (wakeMode) { paused = false; scheduleRestart(300); } } });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { stopRec(); } else { maybeRecap(); offerPaste(); if (wakeMode) { paused = false; scheduleRestart(300); } } });
 const send = () => { const i = $('#cmd'), v = i.value; i.value = ''; handle(v); };
 $('#send').addEventListener('click', send);
 $('#cmd').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
@@ -1397,7 +1415,8 @@ document.addEventListener('click', async e => {
   if (a === 'addAppt') { const t = $('#aTitle').value.trim(); if (!t) return; addAppt(t, $('#aDate').value, $('#aTime').value, false); $('#aTitle').value = ''; $('#aTime').value = ''; }
   else if (a === 'cal') { const ev = S.agenda.find(x => x.id === id); if (ev) shareFile(new File([icsText(ev)], 'evento.ics', {type: 'text/calendar'}), true); }
   else if (a === 'delAppt') { S.agenda = S.agenda.filter(x => x.id !== id); save(); renderOggi(); }
-  else if (a === 'syncCal') { location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent('Jarvis Calendario'); }
+  else if (a === 'syncCal') { S.stats.pendingPaste = Date.now(); save(); location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent('Jarvis Calendario'); }
+  else if (a === 'pasteImport') pasteImport();
   else if (a === 'importChat') $('#chatFile').click();
   else if (a === 'copyDbg') { try { await navigator.clipboard.writeText(DBG.join('\n')); b.textContent = 'Copiato'; } catch (x) { b.textContent = 'Copia non permessa'; } }
   else if (a === 'addReg') { const w = $('#rWho').value.trim(); if (!w) return; addReg(w, $('#rCh').value, $('#rNote').value); $('#rWho').value = ''; $('#rNote').value = ''; }
