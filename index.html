@@ -197,7 +197,7 @@ nav button.on{text-shadow:0 0 8px rgba(44,196,255,.8)}
       <button class="btn" data-a="addReg">Registra</button>
     </div>
     <div id="regList"></div>
-    <div class="row"><button class="btn small" data-a="recapNow">Fammi il riepilogo</button><button class="btn ghost small" data-a="importChat">Importa chat WhatsApp</button><input id="chatFile" type="file" accept=".txt,.zip,text/plain,application/zip" hidden></div>
+    <div class="row"><button class="btn small" data-a="recapNow">Fammi il riepilogo</button><button class="btn ghost small" data-a="syncSec">Controlla segreteria</button><button class="btn ghost small" data-a="importChat">Importa chat WhatsApp</button><input id="chatFile" type="file" accept=".txt,.zip,text/plain,application/zip" hidden></div>
     <p class="hint">Per importare una chat: in WhatsApp apri la conversazione, tocca il nome in alto › «Esporta chat» › «Senza media», salva il file in File, poi scegli quel file qui. Jarvis annota chi ti ha scritto e fa un mini riepilogo.</p>
     <p class="hint">Dillo a Jarvis: «ha chiamato Mario Rossi» o «Anna Bianchi ha scritto su WhatsApp che arriva tardi». Quando riapri l'app ti racconta cosa ti sei perso.</p>
     <p class="hint">«Calendario» crea l'evento nell'app Calendario di Apple: iOS ti chiede di confermare con un tocco.</p>
@@ -240,6 +240,11 @@ nav button.on{text-shadow:0 0 8px rgba(44,196,255,.8)}
       <label class="f">Sicurezza richiesta prima di fare da solo<select id="thr"><option value="3">Prudente · 3 conferme</option><option value="2">Equilibrato · 2 conferme</option><option value="1">Audace · 1 conferma</option></select></label>
       <label class="f">Modalità<select id="autoMode"><option value="0">Con insegnante (IA)</option><option value="1">Autonoma (senza IA)</option></select></label>
     </div>
+    <h3>Studente · distillazione</h3>
+    <p class="hint">Oltre alle abilità a schema, Jarvis addestra su questo dispositivo un piccolo modello «studente». L'insegnante (Claude o Gemini) agisce e dichiara con quali probabilità la frase significava ciascuna azione; lo studente impara a imitare quelle probabilità (perdita di distillazione) e a estrarre nomi, voci e titoli dagli esempi reali. Quando concorda abbastanza con l'insegnante, agisce da solo.</p>
+    <div class="result" id="stuBox"></div>
+    <div class="row"><label class="f">Studente<select id="stuMode"><option value="auto">Automatico</option><option value="shadow">Solo in ombra: impara ma non agisce</option><option value="off">Disattivo</option></select></label></div>
+    <div class="row"><button class="btn ghost small" data-a="stuAnnotate">Fai annotare all'insegnante</button><button class="btn ghost small" data-a="stuTrain">Allena lo studente</button><button class="btn ghost small" data-a="stuReset">Azzera lo studente</button></div>
     <div id="skillList"></div>
     <div class="row"><button class="btn ghost small" data-a="exportDataset">Esporta gli esempi</button><button class="btn ghost small" data-a="forgetSkills">Dimentica le abilità</button></div>
     <p class="hint">Cosa significa «autonomo»: Jarvis ripete da solo le richieste di routine che Claude gli ha già insegnato (spesa, agenda, promemoria, schede). Per richieste nuove o conversazioni libere serve ancora un modello linguistico. Gli esempi esportati servono ad addestrare un piccolo modello tutto suo, che potrà girare sul dispositivo.</p>
@@ -329,6 +334,14 @@ nav button.on{text-shadow:0 0 8px rgba(44,196,255,.8)}
     </ol>
     <p class="hint">Alternativa per Safari: <code id="calUrl">…</code> seguito dal testo codificato.</p>
 
+    <h3>Segreteria AI (chiamate)</h3>
+    <p class="hint">Quando non rispondi, la chiamata viene inoltrata a un servizio online che chiede nome, cognome e motivo e te li fa trovare qui. Serve un piccolo servizio da configurare una volta: la guida è nel file GUIDA-SEGRETERIA.txt.</p>
+    <div class="row">
+      <label class="f">Indirizzo del servizio<input id="secUrl" placeholder="https://….workers.dev" autocapitalize="off" autocomplete="off"></label>
+      <label class="f">Codice segreto<input id="secToken" type="password" autocomplete="off" autocapitalize="off"></label>
+    </div>
+    <div class="row"><button class="btn small" data-a="syncSec">Controlla ora</button></div>
+
     <h3>Cosa può fare sull'iPad</h3>
     <ul class="hint">
       <li>Agenda, spesa, memoria, registro, lezioni e dosi: dentro Jarvis, in autonomia.</li>
@@ -338,7 +351,7 @@ nav button.on{text-shadow:0 0 8px rgba(44,196,255,.8)}
 
     <h3>Chiamate e WhatsApp</h3>
     <ul class="hint">
-      <li><b>Rispondere alle chiamate</b>: nessuna app può farlo su iPhone. Jarvis registra quello che gli dici («ha chiamato Mario Rossi»). Apple offre da sé la Segreteria in diretta, che trascrive i messaggi in arrivo.</li>
+      <li><b>Rispondere alle chiamate</b>: nessuna app sul telefono può farlo. Con la <b>Segreteria AI</b> qui sopra (inoltro delle chiamate a un servizio online) sì. Puoi anche dire a Jarvis «ha chiamato Mario Rossi».</li>
       <li><b>WhatsApp</b>: nessuna app può leggere o rispondere da sola ai tuoi messaggi, e i programmi che lo fanno rischiano il blocco del numero. Jarvis scrive la bozza e la invii tu con un tocco. Risposte automatiche vere esistono solo con WhatsApp Business (account separato).</li>
     </ul>
 
@@ -384,13 +397,13 @@ const DAYRX_U = new RegExp('(^|[^\\p{L}])(dopodomani|domani|oggi|stasera|stamatt
 const MESI = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
 
 /* ================= stato ================= */
-const DEF = {agenda: [], spesa: [], memoria: [], lezioni: [], log: [], skills: [], dataset: [], recent: [], registro: [], lastRecap: 0, ical: {ts: 0, events: []}, waSeen: {},
-  stats: {cmds: 0, items: {}, voice: true, rate: 1, name: '', apiKey: '', model: 'claude-sonnet-5-5', introKey: false, threshold: 2, autonomous: false, teacherCalls: 0, provider: 'claude', geminiKey: '', geminiModel: 'gemini-3.5-flash', voiceEngine: 'device', gvoice: 'Charon', ttsModel: 'gemini-2.5-flash-preview-tts'}};
+const DEF = {agenda: [], spesa: [], memoria: [], lezioni: [], log: [], skills: [], dataset: [], recent: [], student: {n: 0, acc: 0, trainedAt: 0, agree: [], lastAnn: 0}, registro: [], lastRecap: 0, ical: {ts: 0, events: []}, waSeen: {},
+  stats: {cmds: 0, items: {}, voice: true, rate: 1, name: '', apiKey: '', model: 'claude-sonnet-5-5', introKey: false, threshold: 2, autonomous: false, teacherCalls: 0, provider: 'claude', studentMode: 'auto', secUrl: '', secToken: '', secSince: 0, geminiKey: '', geminiModel: 'gemini-3.5-flash', voiceEngine: 'device', gvoice: 'Charon', ttsModel: 'gemini-2.5-flash-preview-tts'}};
 let S = JSON.parse(JSON.stringify(DEF));
 function load() {
   try {
     const r = localStorage.getItem('jarvis_app_v1');
-    if (r) { const d = JSON.parse(r); S = Object.assign(S, d); S.stats = Object.assign({}, DEF.stats, d.stats || {}); }
+    if (r) { const d = JSON.parse(r); S = Object.assign(S, d); S.stats = Object.assign({}, DEF.stats, d.stats || {}); S.student = Object.assign({}, DEF.student, S.student || {}); }
   } catch (e) {}
 }
 function save() {
@@ -600,12 +613,12 @@ function queueDocument(title, blocks) {
 
 /* ================= registro: chi ti ha cercato ================= */
 const nameCase = x => String(x || '').trim().replace(/\S+/g, w => w.charAt(0).toUpperCase() + w.slice(1));
-function addReg(who, channel, note, ts) {
+function addReg(who, channel, note, ts, sid) {
   who = nameCase(who); if (!who) return;
-  S.registro.unshift({id: uid(), ts: ts || Date.now(), who, channel: String(channel || 'altro'), note: String(note || '').trim().slice(0, 200)});
+  S.registro.unshift({id: uid(), ts: ts || Date.now(), who, channel: String(channel || 'altro'), note: String(note || '').trim().slice(0, 200), sid: sid || '', fresh: !!sid});
   S.registro = S.registro.slice(0, 200); save(); renderReg();
 }
-const missedSince = () => S.registro.filter(r => r.ts > (S.lastRecap || 0));
+const missedSince = () => S.registro.filter(r => r.fresh || r.ts > (S.lastRecap || 0));
 function recapText(list) {
   if (!list.length) return 'Niente di nuovo: nessuno ti ha cercato.';
   const calls = list.filter(r => /chiamat/i.test(r.channel)).length, msgs = list.length - calls, by = {};
@@ -616,10 +629,10 @@ function recapText(list) {
     return `${w} (${chs}${notes ? ': ' + notes : ''})`;
   }).join('; ') + '.';
 }
-function doRecap(mark) { const t = recapText(missedSince()); if (mark !== false) { S.lastRecap = Date.now(); save(); } return t; }
-function maybeRecap() {
+function doRecap(mark) { const t = recapText(missedSince()); if (mark !== false) { S.lastRecap = Date.now(); S.registro.forEach(r => { r.fresh = false; }); save(); } return t; }
+function maybeRecap(prefix) {
   if (!missedSince().length) return;
-  const t = 'Bentornato. ' + doRecap(true); addLog('jv', t); renderAll();
+  const t = (prefix || 'Bentornato. ') + doRecap(true); addLog('jv', t); renderAll();
   if (S.stats.voice) speak(t);
 }
 function renderReg() {
@@ -733,15 +746,42 @@ async function importChat(file) {
 }
 
 /* ================= ponte con i Comandi Rapidi tramite gli appunti (funziona anche nell'app installata) ================= */
+function parseRecents(text) {
+  const label = /^(cellulare|mobile|iphone|casa|lavoro|facetime|audio|video|altro|principale|italia|segreteria)\b/i,
+    chrome = /^(recenti|tutte|perse|tutte\s+perse|modifica|chiamate|rubrica|tastierino|preferiti|oggi|ieri|ieri sera|info|chiamata persa|chiamata in arrivo|chiamata in uscita)$/i,
+    when = /^(\d{1,2}[:.]\d{2}|\d{1,2}\/\d{1,2}(\/\d{2,4})?|lun|mar|mer|gio|ven|sab|dom|luned[iì]|marted[iì]|mercoled[iì]|gioved[iì]|venerd[iì]|sabato|domenica)\b/i, out = {};
+  text.split(/\n+/).forEach(raw => {
+    const l = raw.replace(/[^\p{L}\p{N}+()\s.'’-]/gu, ' ').replace(/\s+/g, ' ').trim(); if (!l) return;
+    const m = l.match(/^(.+?)\s*\((\d+)\)$/), name = (m ? m[1] : l).trim(), n = m ? +m[2] : 1, phone = /^\+?[\d\s]{7,}$/.test(name);
+    if (!phone && (!/\p{L}/u.test(name) || name.length < 2 || label.test(name) || chrome.test(name) || when.test(name))) return;
+    const k = phone ? name.replace(/\s+/g, ' ') : nameCase(name); out[k] = (out[k] || 0) + n;
+  });
+  return Object.entries(out).map(([who, n]) => ({who, n}));
+}
+function importRecents(text) {
+  const list = parseRecents(text), day = isoDate(new Date()); let added = 0;
+  list.forEach(x => {
+    const sid = 'rec-' + day + '-' + x.who.toLowerCase(); if (S.registro.some(r => r.sid === sid)) return;
+    addReg(x.who, 'chiamata', (x.n > 1 ? x.n + ' chiamate · ' : '') + 'dalle chiamate perse', Date.now(), sid); added++;
+  });
+  if (!list.length) addLog('jv', 'Non ho trovato nomi o numeri in quel testo. Apri Telefono › Recenti › Perse e riesegui il Comando Rapido.');
+  else if (!added) addLog('jv', 'Queste chiamate sono già nel Registro di oggi.');
+  else { setView('jarvis'); maybeRecap('Dalle chiamate perse. '); }
+}
 async function pasteImport() {
   let t = '';
   try { t = await navigator.clipboard.readText(); } catch (e) { dbg('appunti: ' + (e.message || e.name)); t = prompt('Incolla qui il testo copiato dal Comando Rapido (tieni premuto sul campo e scegli Incolla)', '') || ''; }
   t = String(t).trim(); dbg('appunti letti: ' + t.length + ' caratteri');
   if (!t) { addLog('jv', 'Gli appunti sono vuoti. Esegui prima il Comando Rapido e poi riprova.'); return; }
   if (/^JARVISCAL:/i.test(t)) { importCal(t.replace(/^JARVISCAL:/i, '')); return; }
+  if (/^JARVISCALLS:/i.test(t)) { importRecents(t.replace(/^JARVISCALLS:/i, '')); return; }
   if (/^JARVISQ:/i.test(t)) { setView('jarvis'); await handle(t.replace(/^JARVISQ:/i, ''), {fromLink: true}); return; }
   if (/^\s*\d{4}-\d{2}-\d{2}[^|]*\|/.test(t)) { importCal(t); return; }
-  addLog('jv', 'Negli appunti non c\'è nulla di Jarvis. Esegui il Comando Rapido «Jarvis» o «Jarvis Calendario» e poi tocca Incolla.');
+  if (t.length >= 15 && hasBrain() && !S.stats.autonomous && confirm('Vuoi che l\'IA legga questo testo (per esempio la trascrizione di un messaggio in segreteria)? Verrà inviato a ' + (S.stats.provider === 'gemini' ? 'Google (Gemini)' : 'Anthropic (Claude)') + '.')) {
+    setView('jarvis');
+    await handle('Questo testo è stato copiato dall\'utente, per esempio la trascrizione di un messaggio in segreteria. Ricava chi ha chiamato o scritto (nome e cognome, oppure il numero) e il motivo, annotalo con log_event (canale chiamata o SMS) e riassumi in una frase. Se non è una chiamata o un messaggio, dillo.\n\n' + t.slice(0, 3000), {display: 'Testo incollato dagli appunti', noLearn: true}); return;
+  }
+  addLog('jv', 'Negli appunti non c\'è nulla che io possa usare. Esegui un Comando Rapido di Jarvis e poi tocca Incolla.');
 }
 function offerPaste() {
   const pend = S.stats.pendingPaste || 0;
@@ -749,6 +789,239 @@ function offerPaste() {
   S.stats.pendingPaste = 0; save();
   addAction({title: 'Dati dal Comando Rapido', sub: 'Tocca per leggerli dagli appunti', cta: 'Incolla', run: () => pasteImport()});
 }
+/* ================= studente: distillazione dall'insegnante =================
+   L'insegnante (Claude o Gemini) agisce e annota; lo studente è un modello piccolo, addestrato qui sul dispositivo:
+   - classificatore dell'intento (regressione softmax) addestrato con la perdita di distillazione
+       L = α·T²·KL(p_ins^T ‖ p_stud^T) + (1−α)·CE(etichetta vera)
+     dove p_ins sono le probabilità che l'insegnante dichiara per ogni azione;
+   - estrattore dei dati (nomi, voci, titoli…) tipo perceptron mediato, addestrato sulle azioni reali dell'insegnante.
+   Le motivazioni («why») dell'insegnante vengono conservate negli esempi esportabili. */
+const INTENTS = ['add_shopping_items', 'remove_shopping_items', 'add_appointment', 'list_agenda', 'delete_appointment', 'remember', 'log_event', 'open_tab', 'check_secretary', 'solo_insegnante'];
+const INTENT_DESC = {add_shopping_items: 'aggiungere voci alla lista della spesa', remove_shopping_items: 'togliere voci dalla lista della spesa', add_appointment: 'aggiungere un impegno o appuntamento in agenda', list_agenda: 'chiedere cosa c\'è in agenda', delete_appointment: 'eliminare un impegno dall\'agenda', remember: 'ricordare un fatto o una preferenza', log_event: 'annotare che qualcuno ha chiamato o scritto', open_tab: 'aprire una scheda dell\'app', check_secretary: 'controllare la segreteria telefonica', solo_insegnante: 'qualsiasi altra richiesta: domande, documenti, calcoli, messaggi, conversazione'};
+const K = INTENTS.length, D = 2048, KD_T = 2, KD_ALPHA = 0.6, STU_KEY = 'jarvis_student_v1';
+const FIELDMAP = {add_shopping_items: {items: 'items'}, remove_shopping_items: {items: 'items'}, add_appointment: {title: 'title'}, delete_appointment: {title_contains: 'title'}, remember: {text: 'text'}, log_event: {who: 'who', note: 'note'}};
+const TAGS = ['O'].concat(['items', 'title', 'text', 'who', 'note'].flatMap(t => ['B-' + t, 'I-' + t]));
+let STU = null, distTimer = null, distilling = false, lastTrainN = 0;
+function hardIntent(trace) {
+  if (!trace || trace.failed) return null;
+  if (trace.length !== 1) return 'solo_insegnante';
+  return INTENTS.includes(trace[0].name) && trace[0].name !== 'solo_insegnante' ? trace[0].name : 'solo_insegnante';
+}
+function fnv(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) % D; }
+function featsOf(text) {
+  const toks = normWhen(cleanUtt(text)).text.match(/[\p{L}\p{N}'’§-]+/gu) || [], f = new Set();
+  toks.forEach((w, i) => { f.add(fnv('u:' + w)); if (i) f.add(fnv('b:' + toks[i - 1] + '_' + w)); });
+  if (toks[0]) { f.add(fnv('f:' + toks[0])); f.add(fnv('F:' + toks[0])); f.add(fnv('G:' + toks[0])); } if (toks[1]) f.add(fnv('f2:' + toks[0] + '_' + toks[1])); f.add(fnv('len:' + Math.min(8, toks.length)));
+  return [...f];
+}
+function softmax(z, T) { T = T || 1; let m = -1e9; for (const v of z) if (v > m) m = v; const e = Array.from(z, v => Math.exp((v - m) / T)), s = e.reduce((a, b) => a + b, 0); return e.map(v => v / s); }
+function logitsOf(M, f) { const z = new Float32Array(K); for (let k = 0; k < K; k++) { let s = M.b[k]; const o = k * D; for (const i of f) s += M.W[o + i]; z[k] = s; } return z; }
+function trainSoftmax(rows, epochs) {
+  const W = new Float32Array(K * D), b = new Float32Array(K), lr = 0.25, l2 = 1e-5; let seed = 12345; const idx = rows.map((_, i) => i);
+  for (let ep = 0; ep < epochs; ep++) {
+    for (let i = idx.length - 1; i > 0; i--) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; const j = seed % (i + 1); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+    for (const ii of idx) {
+      const e = rows[ii], z = logitsOf({W, b}, e.f), s = softmax(z, 1), sT = softmax(z, KD_T);
+      for (let k = 0; k < K; k++) {
+        const dz = KD_ALPHA * KD_T * (sT[k] - e.q[k]) + (1 - KD_ALPHA) * (s[k] - e.y[k]), o = k * D;     /* gradiente della perdita di distillazione */
+        for (const i of e.f) W[o + i] -= lr * (dz + l2 * W[o + i]); b[k] -= lr * dz * 0.2;
+      }
+    }
+  }
+  return {W, b};
+}
+const argmax = a => { let k = 0; for (let i = 1; i < a.length; i++) if (a[i] > a[k]) k = i; return k; };
+function evalSoftmax(M, rows) { let ok = 0; rows.forEach(r => { if (argmax(softmax(logitsOf(M, r.f))) === argmax(r.y)) ok++; }); return rows.length ? ok / rows.length : 0; }
+
+/* ---- estrattore dei dati ---- */
+function tokenizeRaw(text) {
+  const raw = String(text).trim().replace(/^(ehi |hey |ok )?jarvis[\s,.:]*/i, '').replace(/\b(per favore|per piacere|ti prego|grazie)\b/gi, ' '), toks = [], re = /[\p{L}\p{N}]+(?:['’\-:.][\p{L}\p{N}]+)*|[,;|]/gu; let m;
+  while ((m = re.exec(raw))) toks.push({w: m[0], s: m.index, e: m.index + m[0].length});
+  return {raw, toks};
+}
+function alignLabels(text, intent, calls) {
+  const map = FIELDMAP[intent]; if (!map) return null; const {raw, toks} = tokenizeRaw(text), low = raw.toLowerCase(), labels = toks.map(() => 'O');
+  const call = (calls || []).find(c => c.name === intent); if (!call) return null;
+  for (const [field, tag] of Object.entries(map)) {
+    const v = call.input[field]; if (v == null || v === '') continue;
+    for (const val of (Array.isArray(v) ? v : [v])) {
+      const lv = String(val).toLowerCase().trim(), at = low.indexOf(lv); if (!lv || at < 0) return null;
+      let first = true; toks.forEach((t, i) => { if (t.s >= at && t.e <= at + lv.length) { labels[i] = (first ? 'B-' : 'I-') + tag; first = false; } });
+      if (first) return null;
+    }
+  }
+  return {toks, labels};
+}
+function tokFeats(toks, i, intent, prev) {
+  const w = toks[i].w, lw = w.toLowerCase(), g = j => toks[j] ? toks[j].w.toLowerCase() : (j < 0 ? '<s>' : '</s>');
+  return ['b', 'w=' + lw, 'p3=' + lw.slice(0, 3), 's3=' + lw.slice(-3), 'cap=' + (w[0] !== w[0].toLowerCase()), 'dig=' + /\d/.test(w), 'w-1=' + g(i - 1), 'w+1=' + g(i + 1), 'w-2=' + g(i - 2), 'w+2=' + g(i + 2),
+    'bg=' + g(i - 1) + '|' + lw, 'int=' + intent, 'iw=' + intent + '|' + lw, 'ip=' + intent + '|' + g(i - 1), 'pos=' + (i === 0 ? 'F' : i === toks.length - 1 ? 'L' : 'M'), 'pl=' + prev];
+}
+function trainTagger(data, epochs) {
+  const w = {}, tot = {}, ts = {}; let step = 0, seed = 777; const idx = data.map((_, i) => i);
+  const score = (feats, lab) => { let s = 0; for (const f of feats) { const r = w[f]; if (r && r[lab]) s += r[lab]; } return s; };
+  const upd = (feats, lab, d) => { for (const f of feats) { const r = (w[f] = w[f] || {}), t = (tot[f] = tot[f] || {}), q = (ts[f] = ts[f] || {}), cur = r[lab] || 0; t[lab] = (t[lab] || 0) + (step - (q[lab] || 0)) * cur; q[lab] = step; r[lab] = cur + d; } };
+  for (let ep = 0; ep < epochs; ep++) {
+    for (let i = idx.length - 1; i > 0; i--) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; const j = seed % (i + 1); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+    for (const ii of idx) {
+      const ex = data[ii]; let prev = '<s>';
+      for (let i = 0; i < ex.toks.length; i++) {
+        const feats = tokFeats(ex.toks, i, ex.intent, prev), gold = ex.labels[i]; step++;
+        let best = 'O', bs = -1e9; for (const lab of TAGS) { const sc = score(feats, lab); if (sc > bs) { bs = sc; best = lab; } }
+        if (best !== gold) { upd(feats, gold, 1); upd(feats, best, -1); }
+        prev = gold;
+      }
+    }
+  }
+  const out = {};
+  for (const f in w) for (const lab in w[f]) { const avg = ((tot[f][lab] || 0) + (step - (ts[f][lab] || 0)) * w[f][lab]) / Math.max(1, step); if (Math.abs(avg) > 0.02) (out[f] = out[f] || {})[lab] = +avg.toFixed(3); }
+  return out;
+}
+function tagTokens(toks, intent, tag) {
+  let prev = '<s>'; const labs = [];
+  for (let i = 0; i < toks.length; i++) {
+    const feats = tokFeats(toks, i, intent, prev); let best = 'O', bs = -1e9;
+    for (const lab of TAGS) { let sc = 0; for (const f of feats) { const r = tag[f]; if (r && r[lab]) sc += r[lab]; } if (sc > bs) { bs = sc; best = lab; } }
+    labs.push(best); prev = best;
+  }
+  return labs;
+}
+function spansOf(raw, toks, labs, tag) {
+  const out = []; let cur = null;
+  labs.forEach((l, i) => { if (l === 'B-' + tag) { if (cur) out.push(cur); cur = {s: toks[i].s, e: toks[i].e}; } else if (l === 'I-' + tag && cur) cur.e = toks[i].e; else if (cur) { out.push(cur); cur = null; } });
+  if (cur) out.push(cur); return out.map(x => raw.slice(x.s, x.e).trim()).filter(Boolean);
+}
+const STOPW = new Set(['il', 'lo', 'la', 'le', 'i', 'gli', 'un', 'una', 'uno', 'dei', 'delle', 'del', 'degli', 'per', 'favore', 'puoi', 'mi', 'ti', 'che', 'e', 'di', 'da', 'a', 'in', 'sulla', 'nella', 'alla', 'sul', 'nel', 'al', 'lista', 'spesa', 'metti', 'aggiungi', 'togli']);
+function cleanItems(arr) {
+  return arr.map(x => x.split(/\s+/).filter((w, i, a) => !(STOPW.has(w.toLowerCase()) && (i === 0 || i === a.length - 1))).join(' ').trim()).filter(x => x && !STOPW.has(x.toLowerCase()));
+}
+function studentCalls(text, intent, model) {
+  const M = model || STU; if (!M || !M.tag) return null;
+  const {raw, toks} = tokenizeRaw(text), labs = tagTokens(toks, intent, M.tag), g = t => spansOf(raw, toks, labs, t), w = parseWhen(text), today = isoDate(new Date()), low = text.toLowerCase();
+  switch (intent) {
+    case 'add_shopping_items': case 'remove_shopping_items': { const it = cleanItems(g('items')); return it.length ? [{name: intent, input: {items: it}}] : null; }
+    case 'add_appointment': { const t = g('title')[0]; return t && t.length > 2 && !STOPW.has(t.toLowerCase()) && (w.date || w.time) ? [{name: intent, input: {title: cap(t), date: w.date || today, time: w.time || '', duration_min: 60, add_to_calendar: true}}] : null; }
+    case 'list_agenda': return [{name: intent, input: {date: w.date || today}}];
+    case 'delete_appointment': { const t = g('title')[0]; return t ? [{name: intent, input: {title_contains: t}}] : null; }
+    case 'remember': { const t = g('text')[0]; return t ? [{name: intent, input: {text: cap(t)}}] : null; }
+    case 'log_event': { const who = g('who')[0]; return who ? [{name: intent, input: {who: nameCase(who), channel: /whatsapp/.test(low) ? 'WhatsApp' : /\bsms\b/.test(low) ? 'SMS' : /chiam|telefon/.test(low) ? 'chiamata' : 'altro', note: g('note')[0] || ''}}] : null; }
+    case 'open_tab': { const hit = [[/spesa/, 'spesa'], [/agenda|oggi|impegni/, 'oggi'], [/nuoto|lezion/, 'nuoto'], [/memoria|ricord/, 'mem'], [/veterin|dosi|farmac/, 'vet'], [/config|impostaz/, 'cfg']].find(x => x[0].test(low)); return hit ? [{name: intent, input: {tab: hit[1]}}] : null; }
+    case 'check_secretary': return [{name: intent, input: {}}];
+  }
+  return null;
+}
+function agreeSig(calls) {
+  return JSON.stringify((calls || []).map(c => { const i = c.input || {}, o = {}; ['date', 'time', 'tab'].forEach(k => { if (i[k] != null) o[k] = String(i[k]).toLowerCase(); });
+    ['title', 'title_contains', 'text', 'who'].forEach(k => { if (i[k]) o[k] = String(i[k]).toLowerCase().trim(); }); if (i.items) o.items = i.items.map(x => String(x).toLowerCase().trim()).sort(); return [c.name, o]; }));
+}
+function studentRun(text) {
+  if (!STU) return null; const p = softmax(logitsOf(STU, featsOf(text))), k = argmax(p), intent = INTENTS[k];
+  if (intent === 'solo_insegnante') return {intent, conf: p[k], calls: null};
+  let calls = null; try { calls = studentCalls(text, intent); } catch (e) { dbg('studente: ' + e.message); }
+  return {intent, conf: p[k], calls};
+}
+function studentGraduated() {
+  const a = (S.student.agree || []); if (S.student.n < 30 || S.student.acc < 0.9 || a.length < 10) return false;
+  return a.reduce((x, y) => x + y, 0) / a.length >= 0.85;
+}
+function studentMayAct(pred, teacherOK, thr) {
+  if (S.stats.studentMode === 'off' || S.stats.studentMode === 'shadow') return false;
+  if (!teacherOK) return pred.conf >= 0.6;
+  return studentGraduated() && pred.conf >= ({1: 0.75, 2: 0.85, 3: 0.92}[thr] || 0.85);
+}
+function studentShadow(pred, trace) {
+  if (!STU || trace.failed) return; const hi = hardIntent(trace); let ok;
+  if (!pred || pred.intent === 'solo_insegnante') ok = hi === 'solo_insegnante';
+  else ok = hi === pred.intent && !!pred.calls && agreeSig(pred.calls) === agreeSig(trace);
+  S.student.agree.push(ok ? 1 : 0); S.student.agree = S.student.agree.slice(-40); save(); dbg('studente in ombra: ' + (ok ? 'd\'accordo' : 'in disaccordo') + ' (' + (pred ? pred.intent : '—') + ' vs ' + hi + ')');
+}
+async function runLocal(calls, text, label, onWrong) {
+  const outs = []; for (const c of calls) { const t = TOOLS.find(x => x.name === c.name); outs.push({c, res: await t.run(c.input)}); }
+  const reply = localReply(outs); addLog('jv', reply);
+  addAction({title: 'Fatto da solo, senza IA', sub: label, cta: 'Non era questo', run: async () => { if (onWrong) onWrong(); busy = false; await handle(text, {teacher: true}); }});
+  return reply;
+}
+function saveStudent() {
+  try {
+    const nz = [], W = STU.W; for (let i = 0; i < W.length; i++) if (Math.abs(W[i]) > 1e-3) nz.push(i, +W[i].toFixed(3));
+    localStorage.setItem(STU_KEY, JSON.stringify({v: 1, K, D, nz, b: Array.from(STU.b, v => +v.toFixed(3)), tag: STU.tag}));
+  } catch (e) { dbg('studente: salvataggio non riuscito'); }
+}
+function loadStudent() {
+  try { const r = localStorage.getItem(STU_KEY); if (!r) return; const j = JSON.parse(r); if (j.K !== K || j.D !== D) return;
+    const W = new Float32Array(K * D); for (let i = 0; i < j.nz.length; i += 2) W[j.nz[i]] = j.nz[i + 1]; STU = {W, b: Float32Array.from(j.b), tag: j.tag || {}}; } catch (e) {}
+}
+function trainStudentNow() {
+  const ex = S.dataset.filter(d => d.intent && INTENTS.includes(d.intent)); if (ex.length < 10) return false;
+  const rows = ex.map(d => {
+    const y = new Array(K).fill(0); y[INTENTS.indexOf(d.intent)] = 1; let q = y;
+    if (d.soft) { q = INTENTS.map(k => Math.pow(d.soft.p[k] || 0, 1 / KD_T)); const s = q.reduce((a, b) => a + b, 0); q = s > 0 ? q.map(v => v / s) : y; }
+    return {f: featsOf(d.u), y, q};
+  });
+  const test = rows.filter((_, i) => i % 5 === 0), train = rows.filter((_, i) => i % 5 !== 0); let acc = 0;
+  if (train.length >= 8 && test.length >= 2) acc = evalSoftmax(trainSoftmax(train, 60), test);
+  const full = trainSoftmax(rows, 60), tdata = [];
+  ex.forEach(d => { const al = alignLabels(d.u, d.intent, d.calls); if (al) tdata.push({toks: al.toks, labels: al.labels, intent: d.intent, d}); });
+  const tag = tdata.length >= 5 ? trainTagger(tdata, 8) : {};
+  STU = {W: full.W, b: full.b, tag}; saveStudent();
+  S.student.n = ex.length; S.student.acc = +acc.toFixed(3); S.student.trainedAt = Date.now(); lastTrainN = ex.length; save(); renderScuola();
+  dbg('studente addestrato: ' + ex.length + ' esempi, accuratezza di prova ' + Math.round(acc * 100) + '%'); return true;
+}
+async function annotateBatch() {
+  const pend = S.dataset.filter(d => !d.soft && d.intent && d.u.length <= 200).slice(-10); if (!pend.length || !hasBrain()) return 0;
+  const prompt = `Sei l'insegnante di un assistente personale vocale in italiano. Per ciascuna frase dell'utente indica, come distribuzione di probabilità (valori tra 0 e 1, somma 1), quale azione sta chiedendo, scegliendo tra:\n` +
+    INTENTS.map(k => `- ${k}: ${INTENT_DESC[k]}`).join('\n') + `\nSii onesto sull'incertezza: se la frase è ambigua distribuisci la probabilità tra le azioni plausibili. Per ogni frase aggiungi in «why» una sola frase breve che spiega il tuo ragionamento. Rispondi SOLO con un array JSON, senza altro testo, nel formato [{"i":0,"p":{"add_shopping_items":0.9,"solo_insegnante":0.1},"why":"..."}].\nFrasi:\n` + pend.map((d, j) => `${j}. ${d.u}`).join('\n');
+  let text = '';
+  if (S.stats.provider === 'gemini') {
+    const r = await postJSON('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(S.stats.geminiModel || 'gemini-3.5-flash') + ':generateContent', {'x-goog-api-key': S.stats.geminiKey},
+      {contents: [{parts: [{text: prompt}]}], generationConfig: {responseMimeType: 'application/json', temperature: 0}});
+    if (!r.ok) throw {status: r.status}; const j = await r.json(); text = (((((j.candidates || [])[0] || {}).content || {}).parts) || []).map(p => p.text || '').join('');
+  } else {
+    const r = await postJSON('https://api.anthropic.com/v1/messages', {'x-api-key': S.stats.apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true'},
+      {model: S.stats.model || 'claude-sonnet-5-5', max_tokens: 3000, messages: [{role: 'user', content: prompt}]});
+    if (!r.ok) throw {status: r.status}; const j = await r.json(); text = (j.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+  }
+  const a = text.indexOf('['), b = text.lastIndexOf(']'); if (a < 0 || b < a) throw new Error('risposta non in formato JSON');
+  const arr = JSON.parse(text.slice(a, b + 1)); let n = 0;
+  arr.forEach(it => {
+    const d = pend[it.i]; if (!d || !it.p) return; const p = {}; let sum = 0;
+    for (const k of INTENTS) { const v = +it.p[k]; if (v > 0) { p[k] = v; sum += v; } }
+    if (sum <= 0) return; for (const k in p) p[k] = +(p[k] / sum).toFixed(4); d.soft = {p, why: String(it.why || '').slice(0, 240)}; n++;
+  });
+  S.student.lastAnn = Date.now(); save(); renderScuola(); dbg('annotazioni dell\'insegnante: ' + n); return n;
+}
+function scheduleDistill() { clearTimeout(distTimer); distTimer = setTimeout(distillCycle, 5000); }
+async function distillCycle() {
+  if (distilling || busy) return; distilling = true;
+  try {
+    const un = S.dataset.filter(d => !d.soft && d.intent).length;
+    if (hasBrain() && !S.stats.autonomous && un >= 10 && Date.now() - (S.student.lastAnn || 0) > 120000) await annotateBatch();
+    const n = S.dataset.filter(d => d.intent).length; if (n >= 10 && n - lastTrainN >= 5) trainStudentNow();
+  } catch (e) { dbg('distillazione: ' + (e.message || e.status || e)); } finally { distilling = false; }
+}
+
+/* ================= segreteria AI: chiamate prese dal servizio online ================= */
+async function syncSecretary(silent, noRecap) {
+  const u = (S.stats.secUrl || '').trim().replace(/\/+$/, ''), tk = (S.stats.secToken || '').trim();
+  if (!u || !tk) { if (!silent) addLog('jv', 'La segreteria non è collegata: inserisci indirizzo e codice in Config › Segreteria AI.'); return 0; }
+  try {
+    const r = await fetch(u + '/api/messages?since=' + (S.stats.secSince || 0), {headers: {authorization: 'Bearer ' + tk}});
+    if (r.status === 401) throw new Error('codice segreto non valido');
+    if (!r.ok) throw new Error('errore ' + r.status);
+    const j = await r.json(); let n = 0;
+    (j.messages || []).forEach(m => {
+      S.stats.secSince = Math.max(S.stats.secSince || 0, m.ts || 0);
+      if (S.registro.some(x => x.sid === m.id)) return;
+      const who = m.name && m.name !== 'non indicato' ? m.name : (m.from || 'Numero sconosciuto');
+      addReg(who, 'chiamata', (m.reason || '') + (m.from && who !== m.from ? ' · ' + m.from : ''), m.ts, m.id); n++;
+    });
+    save(); dbg('segreteria: ' + n + ' nuove chiamate');
+    if (n && !noRecap) maybeRecap('Dalla segreteria. ');
+    else if (!n && !silent) addLog('jv', 'Nessuna nuova chiamata alla segreteria.');
+    return n;
+  } catch (e) { dbg('segreteria errore: ' + (e.message || e.name)); if (!silent) addLog('jv', 'Non riesco a leggere la segreteria: ' + (e.message || 'errore di rete') + '.'); return 0; }
+}
+
 /* ================= interprete locale (senza chiave) ================= */
 function setPlan(pub, liv, stile, min) {
   currentPlan = genPlan(pub, liv, stile, min);
@@ -775,6 +1048,7 @@ function interpret(raw) {
   }
   if ((m = t.match(/^(?:mi\s+)?ha\s+chiamato\s+(.+)$/)) || (m = t.match(/^chiamata\s+(?:persa\s+)?da\s+(.+)$/))) { addReg(m[1], 'chiamata', ''); return 'Annotato: chiamata di ' + nameCase(m[1]) + '.'; }
   if ((m = t.match(/^(?:mi\s+)?ha\s+scritto\s+(.+?)(?:\s+(?:su\s+)?(whatsapp|sms))?(?:\s*(?::|che)\s*(.+))?$/))) { addReg(m[1], m[2] ? (m[2] === 'sms' ? 'SMS' : 'WhatsApp') : 'WhatsApp', m[3] || ''); return 'Annotato: messaggio di ' + nameCase(m[1]) + '.'; }
+  if (/(controlla|sincronizza|aggiorna).*segreteria|segreteria.*(novit|nuov)/.test(t)) { syncSecretary(false); return 'Controllo la segreteria…'; }
   if (/(cosa mi sono perso|chi mi ha cercato|riepilogo|recap)/.test(t)) return doRecap(true);
   if (/(organizza|pianifica|piano).*(giornata|oggi)/.test(t)) return planDay();
   if (/(cosa|che)\s+(ho|devo fare)|agenda|appuntamenti|impegni/.test(t) && !/(aggiungi|segna|fissa|metti)/.test(t)) return speakEvents(parseWhen(t).date || isoDate(new Date()));
@@ -832,6 +1106,9 @@ const TOOLS = (() => {
     {name: 'log_event', description: 'Annota nel registro che qualcuno ha chiamato o scritto all\'utente (nome e cognome, canale, nota breve).',
       input_schema: {type: 'object', properties: {who: {type: 'string', description: 'nome e cognome'}, channel: {type: 'string', enum: ['chiamata', 'WhatsApp', 'SMS', 'altro']}, note: {type: 'string', description: 'contenuto o motivo in breve, vuoto se non noto'}}, required: ['who', 'channel']},
       run: i => { addReg(String(i.who || ''), String(i.channel || 'altro'), String(i.note || '')); return 'ok: annotato nel registro'; }},
+    {name: 'check_secretary', description: 'Controlla se la segreteria AI ha preso nuove chiamate (nome, cognome, motivo) e restituisce un riepilogo.',
+      input_schema: {type: 'object', properties: {force: {type: 'boolean', description: 'non necessario'}}},
+      run: async () => { const n = await syncSecretary(true, true); return n ? n + ' nuove chiamate. ' + doRecap(true) : 'Nessuna nuova chiamata alla segreteria.'; }},
     {name: 'list_missed', description: 'Restituisce un riepilogo di chi ha cercato l\'utente dall\'ultimo riepilogo. Poi riassumilo a voce in modo breve.',
       input_schema: {type: 'object', properties: {mark_seen: {type: 'boolean', description: 'default true'}}},
       run: i => doRecap(i.mark_seen !== false)},
@@ -870,6 +1147,7 @@ Come lavori:
 - WhatsApp: non puoi leggere né inviare messaggi da solo. Prepara una bozza con draft_message (canale whatsapp, sms o email): l'utente la invia con un tocco, ed è la sua autorizzazione. I numeri cercali tra le cose da ricordare; se mancano lascia il numero vuoto.
 - Chiamate e messaggi ricevuti: quando l'utente dice chi lo ha chiamato o scritto usa log_event (nome e cognome). Se chiede cosa si è perso o chi lo ha cercato usa list_missed e racconta un mini riepilogo a voce.
 - Calendario iOS: leggi gli eventi qui sopra insieme all'agenda. Se serve un dato più fresco o il calendario non è mai stato sincronizzato, prepara con run_shortcut il Comando Rapido «Jarvis Calendario» (senza input) e dillo all'utente.
+- Segreteria AI: le chiamate a cui il telefono non ha risposto vengono prese da un servizio che chiede nome, cognome e motivo; compaiono nel registro. Per controllarle subito usa check_secretary.
 - Per tabelle, elenchi con colonne, conti e preventivi usa create_spreadsheet (si apre in Numbers).
 - Date in YYYY-MM-DD, ore in HH:MM. Risolvi tu «domani», «venerdì», «la settimana prossima» partendo da oggi.
 - Per le lezioni di nuoto progetta tu un piano concreto per età, livello, stile e durata (i minuti dei blocchi sommano alla durata) e chiama show_swim_plan.
@@ -1114,7 +1392,7 @@ async function runSkill(m, text) {
   return reply;
 }
 function afterTeacher(text, trace, reply, m0) {
-  S.dataset.push({t: Date.now(), u: text, calls: trace.slice(), r: reply}); S.dataset = S.dataset.slice(-400);
+  if (!trace.failed && text.length <= 200) { S.dataset.push({t: Date.now(), u: text, calls: trace.slice(), r: reply, intent: hardIntent(trace)}); S.dataset = S.dataset.slice(-400); }
   const learned = buildSkill(text, trace); let same = false;
   if (m0) { same = sig(m0.calls) === sig(trace); if (same) m0.skill.trust++; else m0.skill.trust = Math.min(m0.skill.trust - 1, 0); }
   if (learned && !(m0 && same && m0.skill.pat === learned.pat)) {
@@ -1126,7 +1404,16 @@ function afterTeacher(text, trace, reply, m0) {
 }
 function pushRecent(x) { S.recent.push(x); S.recent = S.recent.slice(-40); save(); }
 function autonomy() { const r = S.recent; return r.length ? Math.round(100 * r.filter(x => x === 'L').length / r.length) : null; }
+function renderStudent() {
+  const el = $('#stuBox'); if (!el) return;
+  const ann = S.dataset.filter(d => d.soft).length, a = S.student.agree || [], ag = a.length ? Math.round(100 * a.reduce((x, y) => x + y, 0) / a.length) : null;
+  const kb = STU ? Math.round(JSON.stringify({nz: Array.from(STU.W).filter(v => Math.abs(v) > 1e-3).length, tag: STU.tag}).length / 1024) : 0;
+  const stato = !STU ? 'non ancora addestrato' : S.stats.studentMode === 'off' ? 'disattivo' : S.stats.studentMode === 'shadow' ? 'in ombra' : studentGraduated() ? 'autonomo: agisce da solo' : 'apprendista: impara in ombra';
+  el.innerHTML = `Stato <b>${esc(stato)}</b><br>Esempi <b>${S.dataset.filter(d => d.intent).length}</b> · annotati dall'insegnante <b>${ann}</b><br>Accuratezza di prova <b>${STU ? Math.round(S.student.acc * 100) + '%' : '—'}</b> · concordanza con l'insegnante <b>${ag === null ? '—' : ag + '%'}</b> (${a.length}/40)<br><span class="hint">Per agire da solo servono almeno 30 esempi, accuratezza ≥ 90% e concordanza ≥ 85%. Dimensione del modello: ${kb} KB.</span>`;
+  $('#stuMode').value = S.stats.studentMode || 'auto';
+}
 function renderScuola() {
+  renderStudent();
   const a = autonomy(), thr = Math.max(1, +S.stats.threshold || 2);
   $('#autoBox').innerHTML = `Autonomia <b>${a === null ? '—' : a + '%'}</b> · abilità apprese <b>${S.skills.length}</b> · richieste all'insegnante <b>${S.stats.teacherCalls || 0}</b><div class="bar"><i style="width:${a || 0}%"></i></div>`;
   $('#thr').value = String(thr); $('#autoMode').value = S.stats.autonomous ? '1' : '0';
@@ -1159,12 +1446,20 @@ async function handle(text, opts) {
     if (m0 && !opts.teacher && (!teacherOK || m0.skill.trust >= thr)) {
       try { reply = await runSkill(m0, text); pushRecent('L'); dbg('eseguita abilità appresa'); } catch (e) { reply = null; note = 'L\'abilità appresa non è riuscita: ' + e.message; }
     }
+    let stPred = null;
+    if (reply === null && !opts.noLearn) { try { stPred = studentRun(text); } catch (e) { dbg('studente: ' + e.message); } }
+    if (reply === null && stPred && stPred.calls && !opts.teacher && studentMayAct(stPred, teacherOK, thr)) {
+      try {
+        reply = await runLocal(stPred.calls, text, 'studente · ' + stPred.intent + ' · ' + Math.round(stPred.conf * 100) + '%', () => { S.student.agree.push(0); S.student.agree = S.student.agree.slice(-40); save(); renderScuola(); });
+        pushRecent('L'); dbg('eseguito dallo studente: ' + stPred.intent + ' p=' + stPred.conf.toFixed(2));
+      } catch (e) { reply = null; note = 'Lo studente non è riuscito: ' + e.message; dbg(note); }
+    }
     if (reply === null && teacherOK) {
       const entry = {who: 'jv', text: '…'}; S.log.push(entry); renderChat(); const trace = [];
       try {
         S.stats.cmds++; S.stats.teacherCalls = (S.stats.teacherCalls || 0) + 1;
         reply = (await askBrain(text, hist, trace)) || 'Fatto.'; entry.text = reply; pushRecent('T'); dbg('cervello ok (' + S.stats.provider + ')');
-        if (!opts.noLearn) afterTeacher(text, trace, reply, m0);
+        if (!opts.noLearn) { afterTeacher(text, trace, reply, m0); studentShadow(stPred, trace); scheduleDistill(); }
       } catch (e) { const i = S.log.indexOf(entry); if (i >= 0) S.log.splice(i, 1); note = errNote(e); reply = null; dbg('cervello errore: ' + note); }
     } else if (reply === null && !hasBrain()) {
       if (opts.fromLink && !(navigator.standalone || matchMedia('(display-mode: standalone)').matches)) note = 'Questa pagina è aperta in Safari e qui non c\'è la chiave del cervello: l\'app installata ha dati separati. Leggi in Config › «Chiamare Jarvis come Siri».';
@@ -1320,6 +1615,7 @@ function onHeard(txt) {
     else if (awaitUntil > Date.now()) { awaitUntil = 0; handle(txt); }
   } else handle(txt);
 }
+setInterval(() => { if (!document.hidden && S.stats.secUrl) syncSecretary(true); }, 180000);
 setInterval(() => { if (wakeMode && !paused && !recOn && !busy && !document.hidden) { dbg('controllo: riavvio ascolto'); startRec(); } }, 4000);
 $('#orb').addEventListener('click', () => {
   stopSpeech(); $('#hear').classList.remove('on');
@@ -1331,7 +1627,7 @@ $('#tWake').addEventListener('click', e => {
   wakeMode = !wakeMode; e.currentTarget.setAttribute('aria-pressed', String(wakeMode)); stopRec(); paused = false;
   if (wakeMode) { addLog('jv', 'Ascolto continuo attivo: finché Jarvis resta aperto e in primo piano, dì «Jarvis» seguito dal comando.'); dbg('ascolto continuo: acceso'); startRec(); } else { dbg('ascolto continuo: spento'); idleStatus(); }
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden) { stopRec(); } else { maybeRecap(); offerPaste(); if (wakeMode) { paused = false; scheduleRestart(300); } } });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { stopRec(); } else { (async () => { await syncSecretary(true); maybeRecap(); offerPaste(); })(); if (wakeMode) { paused = false; scheduleRestart(300); } } });
 const send = () => { const i = $('#cmd'), v = i.value; i.value = ''; handle(v); };
 $('#send').addEventListener('click', send);
 $('#cmd').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
@@ -1417,6 +1713,7 @@ document.addEventListener('click', async e => {
   else if (a === 'delAppt') { S.agenda = S.agenda.filter(x => x.id !== id); save(); renderOggi(); }
   else if (a === 'syncCal') { S.stats.pendingPaste = Date.now(); save(); location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent('Jarvis Calendario'); }
   else if (a === 'pasteImport') pasteImport();
+  else if (a === 'syncSec') { if (!(S.stats.secUrl && S.stats.secToken)) { setView('cfg'); addLog('jv', 'Prima collega la segreteria: indirizzo e codice sono in Config › Segreteria AI.'); } else { await syncSecretary(false); } }
   else if (a === 'importChat') $('#chatFile').click();
   else if (a === 'copyDbg') { try { await navigator.clipboard.writeText(DBG.join('\n')); b.textContent = 'Copiato'; } catch (x) { b.textContent = 'Copia non permessa'; } }
   else if (a === 'addReg') { const w = $('#rWho').value.trim(); if (!w) return; addReg(w, $('#rCh').value, $('#rNote').value); $('#rWho').value = ''; $('#rNote').value = ''; }
@@ -1445,9 +1742,12 @@ document.addEventListener('click', async e => {
   else if (a === 'calcDose') calcDose();
   else if (a === 'refreshDiag') renderDiag();
   else if (a === 'testBrain') { if (!hasBrain()) { addLog('jv', 'Inserisci prima la chiave API.'); setView('jarvis'); return; } setView('jarvis'); handle('Presentati in una frase e dimmi che il collegamento funziona.'); }
+  else if (a === 'stuAnnotate') { if (!hasBrain()) { addLog('jv', 'Serve una chiave IA per far annotare gli esempi all\'insegnante.'); setView('jarvis'); return; } b.textContent = 'Annoto…'; try { const n = await annotateBatch(); b.textContent = n ? n + ' annotati' : 'Niente da annotare'; } catch (x) { b.textContent = 'Non riuscito'; dbg('annotazione: ' + (x.message || x.status)); } }
+  else if (a === 'stuTrain') { const ok = trainStudentNow(); b.textContent = ok ? 'Addestrato' : 'Servono almeno 10 esempi'; }
+  else if (a === 'stuReset') { if (confirm('Azzerare lo studente? Gli esempi restano.')) { STU = null; try { localStorage.removeItem(STU_KEY); } catch (x) {} S.student = Object.assign({}, DEF.student, {agree: []}); lastTrainN = 0; save(); renderScuola(); } }
   else if (a === 'delSkill') { S.skills = S.skills.filter(x => x.id !== id); save(); renderScuola(); }
   else if (a === 'forgetSkills') { if (confirm('Cancellare tutte le abilità apprese?')) { S.skills = []; S.recent = []; save(); renderScuola(); renderBrain(); } }
-  else if (a === 'exportDataset') shareFile(new File([S.dataset.map(d => JSON.stringify({utterance: d.u, tool_calls: d.calls, reply: d.r})).join('\n')], 'jarvis-esempi.jsonl', {type: 'text/plain'}));
+  else if (a === 'exportDataset') shareFile(new File([S.dataset.map(d => JSON.stringify({utterance: d.u, intent: d.intent || null, intent_probs: d.soft ? d.soft.p : null, rationale: d.soft ? d.soft.why : null, tool_calls: d.calls, reply: d.r})).join('\n')], 'jarvis-esempi.jsonl', {type: 'text/plain'}));
   else if (a === 'exportData') shareFile(new File([JSON.stringify(Object.assign({}, S, {log: []}), null, 1)], 'jarvis-backup.json', {type: 'application/json'}));
   else if (a === 'importData') $('#impFile').click();
 });
@@ -1463,6 +1763,7 @@ $('#impFile').addEventListener('change', async e => {
   catch (x) { addLog('jv', 'Il file non è una copia di sicurezza valida.'); }
   e.target.value = '';
 });
+$('#stuMode').addEventListener('change', e => { S.stats.studentMode = e.target.value; save(); renderScuola(); });
 $('#thr').addEventListener('change', e => { S.stats.threshold = +e.target.value; save(); renderScuola(); });
 $('#autoMode').addEventListener('change', e => { S.stats.autonomous = e.target.value === '1'; save(); renderScuola(); renderBrain(); });
 function syncProvider() {
@@ -1477,6 +1778,8 @@ $('#vEngine').addEventListener('change', e => { S.stats.voiceEngine = e.target.v
 $('#gKeyVoice').addEventListener('change', e => { S.stats.geminiKey = e.target.value.trim(); $('#geminiKey').value = S.stats.geminiKey; gemBroken = false; gemWarned = false; save(); renderBrain(); });
 $('#gVoice').addEventListener('change', e => { S.stats.gvoice = e.target.value; save(); });
 $('#ttsModel').addEventListener('change', e => { S.stats.ttsModel = e.target.value.trim() || 'gemini-2.5-flash-preview-tts'; gemBroken = false; save(); });
+$('#secUrl').addEventListener('change', e => { S.stats.secUrl = e.target.value.trim(); S.stats.secSince = 0; save(); });
+$('#secToken').addEventListener('change', e => { S.stats.secToken = e.target.value.trim(); save(); });
 $('#apiKey').addEventListener('change', e => { S.stats.apiKey = e.target.value.trim(); save(); renderBrain(); });
 $('#model').addEventListener('change', e => { S.stats.model = e.target.value.trim() || 'claude-sonnet-5-5'; save(); });
 $('#uName').addEventListener('change', e => { S.stats.name = e.target.value.trim(); save(); });
@@ -1518,9 +1821,9 @@ function tick() {
   const d = new Date(); $('#clock').textContent = pad(d.getHours()) + ':' + pad(d.getMinutes());
   $('#date').textContent = cap(GIORNI[d.getDay()]) + ' ' + d.getDate() + ' ' + MESI[d.getMonth()];
 }
-load(); buildOrb(); tick(); setInterval(tick, 20000);
+load(); loadStudent(); lastTrainN = S.student.n || 0; buildOrb(); tick(); setInterval(tick, 20000);
 $('#aDate').value = isoDate(new Date());
-$('#geminiKey').value = S.stats.geminiKey || ''; $('#geminiModel').value = S.stats.geminiModel || 'gemini-3.5-flash'; syncProvider(); $('#gKeyVoice').value = S.stats.geminiKey || ''; $('#gVoice').value = S.stats.gvoice || 'Charon'; $('#ttsModel').value = S.stats.ttsModel || 'gemini-2.5-flash-preview-tts'; syncVoiceEngine(); $('#apiKey').value = S.stats.apiKey; $('#model').value = S.stats.model; $('#uName').value = S.stats.name; $('#vRate').value = S.stats.rate || 1;
+$('#secUrl').value = S.stats.secUrl || ''; $('#secToken').value = S.stats.secToken || ''; $('#geminiKey').value = S.stats.geminiKey || ''; $('#geminiModel').value = S.stats.geminiModel || 'gemini-3.5-flash'; syncProvider(); $('#gKeyVoice').value = S.stats.geminiKey || ''; $('#gVoice').value = S.stats.gvoice || 'Charon'; $('#ttsModel').value = S.stats.ttsModel || 'gemini-2.5-flash-preview-tts'; syncVoiceEngine(); $('#apiKey').value = S.stats.apiKey; $('#model').value = S.stats.model; $('#uName').value = S.stats.name; $('#vRate').value = S.stats.rate || 1;
 $('#tVoice').setAttribute('aria-pressed', String(S.stats.voice !== false));
 $('#shortcutUrl').textContent = location.origin + location.pathname + '?q='; $('#calUrl').textContent = location.origin + location.pathname + '?cal=';
 if (!S.log.length) S.log.push({who: 'jv', text: 'Sono Jarvis. Dimmi cosa serve: agenda, spesa, lezioni, documenti, messaggi. Per capire il linguaggio libero inserisci la chiave API in Config.'});
@@ -1535,7 +1838,7 @@ try {
   if (lg) { const x = lg.split('|'); addReg(x[0], x[1] || 'altro', x[2] || ''); }
   if (cal) importCal(cal);
   if (q || lg || cal || g('listen')) history.replaceState(null, '', location.pathname);
-  if (!q) setTimeout(maybeRecap, 700);
+  if (!q) setTimeout(async () => { await syncSecretary(true); maybeRecap(); }, 700);
   if (q) setTimeout(() => handle(q, {fromLink: true}), 500);
   else if (g('listen')) setTimeout(() => { paused = false; startRec(); }, 400);
 } catch (e) { dbg('avvio: ' + e.message); }
