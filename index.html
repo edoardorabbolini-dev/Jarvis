@@ -342,6 +342,10 @@ nav button.on{text-shadow:0 0 8px rgba(44,196,255,.8)}
     </div>
     <div class="row"><button class="btn small" data-a="syncSec">Controlla ora</button></div>
 
+    <h3>Chiamate perse e rubrica</h3>
+    <p class="hint">Nessuna app può leggere il registro chiamate di iPhone. Si può però far arrivare a Jarvis gli <b>avvisi dell'operatore</b> («Chiamami», «LoSai», «Ti ho cercato», «Mi richiami»), che iOS riceve come SMS quando il telefono era occupato, spento o non raggiungibile, e riconoscere i numeri con la tua <b>rubrica</b>. Guida passo passo: file GUIDA-CHIAMATE-PERSE.txt.</p>
+    <div class="row"><button class="btn small" data-a="syncContacts">Aggiorna la rubrica</button><span class="hint" id="contactsInfo"></span></div>
+
     <h3>Cosa può fare sull'iPad</h3>
     <ul class="hint">
       <li>Agenda, spesa, memoria, registro, lezioni e dosi: dentro Jarvis, in autonomia.</li>
@@ -397,7 +401,7 @@ const DAYRX_U = new RegExp('(^|[^\\p{L}])(dopodomani|domani|oggi|stasera|stamatt
 const MESI = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
 
 /* ================= stato ================= */
-const DEF = {agenda: [], spesa: [], memoria: [], lezioni: [], log: [], skills: [], dataset: [], recent: [], student: {n: 0, acc: 0, trainedAt: 0, agree: [], lastAnn: 0}, registro: [], lastRecap: 0, ical: {ts: 0, events: []}, waSeen: {},
+const DEF = {agenda: [], spesa: [], memoria: [], lezioni: [], log: [], skills: [], dataset: [], recent: [], student: {n: 0, acc: 0, trainedAt: 0, agree: [], lastAnn: 0}, registro: [], contacts: [], lastRecap: 0, ical: {ts: 0, events: []}, waSeen: {},
   stats: {cmds: 0, items: {}, voice: true, rate: 1, name: '', apiKey: '', model: 'claude-sonnet-5-5', introKey: false, threshold: 2, autonomous: false, teacherCalls: 0, provider: 'claude', studentMode: 'auto', secUrl: '', secToken: '', secSince: 0, geminiKey: '', geminiModel: 'gemini-3.5-flash', voiceEngine: 'device', gvoice: 'Charon', ttsModel: 'gemini-2.5-flash-preview-tts'}};
 let S = JSON.parse(JSON.stringify(DEF));
 function load() {
@@ -614,11 +618,48 @@ function queueDocument(title, blocks) {
 /* ================= registro: chi ti ha cercato ================= */
 const nameCase = x => String(x || '').trim().replace(/\S+/g, w => w.charAt(0).toUpperCase() + w.slice(1));
 function addReg(who, channel, note, ts, sid) {
-  who = nameCase(who); if (!who) return;
+  const rawWho = String(who || '').trim(), nm = looksPhone(rawWho) ? nameForNumber(rawWho) : null;
+  if (nm) { note = (note ? note + ' · ' : '') + rawWho; who = nm; } else who = looksPhone(rawWho) ? rawWho : nameCase(who);
+  if (!who) return;
   S.registro.unshift({id: uid(), ts: ts || Date.now(), who, channel: String(channel || 'altro'), note: String(note || '').trim().slice(0, 200), sid: sid || '', fresh: !!sid});
   S.registro = S.registro.slice(0, 200); save(); renderReg();
 }
 const missedSince = () => S.registro.filter(r => r.fresh || r.ts > (S.lastRecap || 0));
+/* ================= rubrica e avvisi dell'operatore (chiamate perse) ================= */
+const hash32 = t => { let h = 2166136261; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
+function normNum(n) {
+  let d = String(n || '').replace(/[^\d+]/g, ''); if (d.startsWith('+')) d = d.slice(1); else if (d.startsWith('00')) d = d.slice(2);
+  if (d.startsWith('39') && d.length >= 11) d = d.slice(2); return d;
+}
+const looksPhone = x => /^\+?[\d\s.()-]{7,}$/.test(String(x || '').trim());
+function nameForNumber(num) {
+  const n = normNum(num); if (n.length < 6) return null;
+  const c = (S.contacts || []).find(c => c.p.some(p => p === n)); return c ? c.n : null;
+}
+function importContacts(text) {
+  const list = []; let cur = null;
+  String(text).split(/~|\n/).forEach(tok => {
+    tok = tok.trim(); if (!tok) return;
+    if (tok.includes('|')) { const i = tok.indexOf('|'); cur = {n: nameCase(tok.slice(0, i)), p: []}; list.push(cur); tok = tok.slice(i + 1); }
+    if (!cur) return; tok.split(';').forEach(x => { const d = normNum(x); if (d.length >= 6 && !cur.p.includes(d)) cur.p.push(d); });
+  });
+  S.contacts = list.filter(c => c.n && c.p.length).slice(0, 3000);
+  let fixed = 0; S.registro.forEach(r => { if (looksPhone(r.who)) { const nm = nameForNumber(r.who); if (nm) { r.note = (r.note ? r.note + ' · ' : '') + r.who; r.who = nm; fixed++; } } });
+  save(); renderReg(); dbg('rubrica: ' + S.contacts.length + ' contatti');
+  addLog('jv', S.contacts.length ? `Rubrica aggiornata: ${S.contacts.length} contatti${fixed ? ', ' + fixed + ' chiamate già nel registro riconosciute' : ''}.` : 'Non ho trovato contatti leggibili: controlla il Comando Rapido «Jarvis Contatti».');
+}
+function importSms(raw, sid0, ts) {
+  raw = String(raw || '').replace(/\s+/g, ' ').trim(); if (!raw) return 0;
+  const nums = [...new Set((raw.match(/(?:\+|00)?\d[\d\s.-]{6,}\d/g) || []).map(x => x.trim()))], when = (raw.match(/(\d{1,2}[\/.]\d{1,2}(?:[\/.]\d{2,4})?)\D{1,12}(\d{1,2}[:.]\d{2})/) || []).slice(1, 3).join(' ');
+  const base = sid0 || ('sms-' + hash32(raw)); let n = 0;
+  const targets = nums.length ? nums : [''];
+  targets.forEach((num, i) => {
+    const sid = base + '-' + i; if (S.registro.some(r => r.sid === sid)) return;
+    addReg(num || 'Avviso operatore', 'chiamata', 'avviso dell\'operatore' + (when ? ' · ' + when : '') + (num ? '' : ' · ' + raw.slice(0, 100)), ts || Date.now(), sid); n++;
+  });
+  return n;
+}
+
 function recapText(list) {
   if (!list.length) return 'Niente di nuovo: nessuno ti ha cercato.';
   const calls = list.filter(r => /chiamat/i.test(r.channel)).length, msgs = list.length - calls, by = {};
@@ -774,6 +815,8 @@ async function pasteImport() {
   t = String(t).trim(); dbg('appunti letti: ' + t.length + ' caratteri');
   if (!t) { addLog('jv', 'Gli appunti sono vuoti. Esegui prima il Comando Rapido e poi riprova.'); return; }
   if (/^JARVISCAL:/i.test(t)) { importCal(t.replace(/^JARVISCAL:/i, '')); return; }
+  if (/^JARVISCONTACTS:/i.test(t)) { importContacts(t.replace(/^JARVISCONTACTS:/i, '')); return; }
+  if (/^JARVISSMS:/i.test(t)) { const k = importSms(t.replace(/^JARVISSMS:/i, '')); if (k) maybeRecap('Dall\'avviso dell\'operatore. '); else addLog('jv', 'Quell\'avviso è già nel Registro.'); return; }
   if (/^JARVISCALLS:/i.test(t)) { importRecents(t.replace(/^JARVISCALLS:/i, '')); return; }
   if (/^JARVISQ:/i.test(t)) { setView('jarvis'); await handle(t.replace(/^JARVISQ:/i, ''), {fromLink: true}); return; }
   if (/^\s*\d{4}-\d{2}-\d{2}[^|]*\|/.test(t)) { importCal(t); return; }
@@ -1012,6 +1055,7 @@ async function syncSecretary(silent, noRecap) {
     (j.messages || []).forEach(m => {
       S.stats.secSince = Math.max(S.stats.secSince || 0, m.ts || 0);
       if (S.registro.some(x => x.sid === m.id)) return;
+      if (m.raw) { n += importSms(m.raw, m.id, m.ts); return; }
       const who = m.name && m.name !== 'non indicato' ? m.name : (m.from || 'Numero sconosciuto');
       addReg(who, 'chiamata', (m.reason || '') + (m.from && who !== m.from ? ' · ' + m.from : ''), m.ts, m.id); n++;
     });
@@ -1680,7 +1724,7 @@ function renderDiag() {
     yes('serviceWorker' in navigator && !!navigator.serviceWorker.controller, 'Funziona offline (service worker attivo)', 'Offline non ancora attivo: riapri l\'app una volta con connessione')
   ].join('');
 }
-function renderAll() { renderIcal(); renderReg(); renderOggi(); renderSpesa(); renderNuoto(); renderMem(); renderLearned(); renderScuola(); renderBrain(); renderChat(); }
+function renderAll() { const ci = $('#contactsInfo'); if (ci) ci.textContent = (S.contacts || []).length ? (S.contacts.length + ' contatti nella rubrica di Jarvis') : 'Rubrica non ancora importata'; renderIcal(); renderReg(); renderOggi(); renderSpesa(); renderNuoto(); renderMem(); renderLearned(); renderScuola(); renderBrain(); renderChat(); }
 
 function calcDose() {
   const v = id => parseFloat($(id).value), peso = v('#vPeso'), dose = v('#vDose'), conc = v('#vConc'), freq = v('#vFreq') || 1, mn = v('#vMin'), mx = v('#vMax'), out = $('#vOut');
@@ -1713,6 +1757,7 @@ document.addEventListener('click', async e => {
   else if (a === 'delAppt') { S.agenda = S.agenda.filter(x => x.id !== id); save(); renderOggi(); }
   else if (a === 'syncCal') { S.stats.pendingPaste = Date.now(); save(); location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent('Jarvis Calendario'); }
   else if (a === 'pasteImport') pasteImport();
+  else if (a === 'syncContacts') { S.stats.pendingPaste = Date.now(); save(); location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent('Jarvis Contatti'); }
   else if (a === 'syncSec') { if (!(S.stats.secUrl && S.stats.secToken)) { setView('cfg'); addLog('jv', 'Prima collega la segreteria: indirizzo e codice sono in Config › Segreteria AI.'); } else { await syncSecretary(false); } }
   else if (a === 'importChat') $('#chatFile').click();
   else if (a === 'copyDbg') { try { await navigator.clipboard.writeText(DBG.join('\n')); b.textContent = 'Copiato'; } catch (x) { b.textContent = 'Copia non permessa'; } }
